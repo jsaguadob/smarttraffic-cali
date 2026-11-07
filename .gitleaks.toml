@@ -1,0 +1,7 @@
+# Configuración del escáner de secretos (gitleaks). Parte de las reglas por defecto.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Contraseña desechable del contenedor de PostgreSQL de la integración continua: solo existe durante la ejecución y no protege datos."
+regexes = ['''prueba-ci-2026''']
