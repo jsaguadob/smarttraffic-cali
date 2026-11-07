@@ -45,6 +45,10 @@ public final class Servidor implements AutoCloseable {
         public String origenCors = null;
         /** Modo de demostración: el ingreso ofrece entrar con un clic como cada rol (solo para presentaciones). */
         public boolean demo = false;
+        /** Servicio de OpenStreetMap (API Overpass) del que el servidor descarga el mapa. */
+        public String overpassUrl = "https://overpass-api.de/api/interpreter";
+        public int overpassIntentos = 3;
+        public long overpassEsperaMs = 5000;
     }
 
     /** Respuesta con estado distinto de 200. */
@@ -108,6 +112,7 @@ public final class Servidor implements AutoCloseable {
     private final Repositorio repo;
     private final GestorSimulacion gestor;
     private final ServicioRed servicioRed;
+    private final ImportacionOsm importacionOsm;
     private final HttpServer http;
     private final List<Ruta> rutas = new ArrayList<>();
     // 5 fallos por correo; 30 por dirección (varias personas pueden compartir una misma conexión)
@@ -122,6 +127,7 @@ public final class Servidor implements AutoCloseable {
         this.repo = repo;
         this.gestor = gestor;
         this.servicioRed = servicioRed;
+        this.importacionOsm = new ImportacionOsm(servicioRed, opc.overpassUrl, opc.overpassIntentos, opc.overpassEsperaMs);
         for (String o : opc.origenCors == null ? new String[0] : opc.origenCors.split(",")) {
             String origen = o.trim();
             if (origen.isEmpty() || origen.equals("*")) continue; // un comodín total anularía la protección: no se admite
@@ -146,6 +152,7 @@ public final class Servidor implements AutoCloseable {
 
     @Override
     public void close() {
+        importacionOsm.cerrar();
         http.stop(0);
     }
 
@@ -265,6 +272,17 @@ public final class Servidor implements AutoCloseable {
         ruta("PUT", "/api/red/vias/{id}", ADMIN, p -> { var r = servicioRed.actualizarVia(p.params.get("id"), p.cuerpo()); auditar(p, "red_via_editar", r.id()); return resultado(r); });
         ruta("DELETE", "/api/red/vias/{id}", ADMIN, p -> { var r = servicioRed.eliminarVia(p.params.get("id")); auditar(p, "red_via_eliminar", r.id()); return resultado(r); });
         ruta("POST", "/api/red/importar", ADMIN, CUERPO_GRANDE, p -> { var r = servicioRed.reemplazar(p.cuerpoTexto); auditar(p, "red_importar", null); return resultado(r); });
+        ruta("POST", "/api/red/importar-osm", ADMIN, p -> {
+            double[] zona = ImportacionOsm.CENTRO_CALI;
+            if (!p.cuerpo().isEmpty()) {
+                Map<String, Object> c = p.cuerpo();
+                zona = new double[] {numero(c, "sur", -90, 90, null), numero(c, "oeste", -180, 180, null), numero(c, "norte", -90, 90, null), numero(c, "este", -180, 180, null)};
+            }
+            if (!importacionOsm.iniciar(zona)) throw new IllegalStateException("Ya hay una importación en curso. Espera a que termine.");
+            auditar(p, "red_importar_osm", java.util.Arrays.toString(zona));
+            return new Respuesta(202, importacionOsm.estado());
+        });
+        ruta("GET", "/api/red/importar-osm", ADMIN, p -> importacionOsm.estado());
         ruta("POST", "/api/accidentes", ADMIN, CUERPO_GRANDE, p -> {
             var lista = DatosAbiertos.aAccidentes(DatosAbiertos.leerPuntos(texto(p.cuerpo(), "contenido")));
             repo.reemplazarAccidentes(lista);
@@ -391,7 +409,7 @@ public final class Servidor implements AutoCloseable {
         try {
             Headers h = ex.getResponseHeaders();
             h.set("X-Content-Type-Options", "nosniff");
-            h.set("Referrer-Policy", "no-referrer");
+            h.set("Referrer-Policy", "strict-origin-when-cross-origin"); // los servidores de mapas piden saber desde qué sitio se les llama
             h.set("X-Frame-Options", "DENY");
             String origenPeticion = ex.getRequestHeaders().getFirst("Origin");
             if (origenPeticion != null && origenPermitido(origenPeticion)) {
@@ -541,7 +559,7 @@ public final class Servidor implements AutoCloseable {
         h.set("Content-Type", TIPOS.getOrDefault(ext, "application/octet-stream"));
         if (ext.equals("html")) {
             h.set("Cache-Control", "no-cache");
-            h.set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'");
+            h.set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'");
         } else {
             h.set("Cache-Control", camino.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache");
         }

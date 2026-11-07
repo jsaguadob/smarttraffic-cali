@@ -6,11 +6,11 @@ import type { Usuario } from './tipos';
 export function Marca({ tam = 28 }: { tam?: number }): ReactElement {
   return (
     <svg width={tam} height={tam} viewBox="0 0 64 64" aria-hidden="true">
-      <rect width="64" height="64" rx="14" fill="#16233b" />
-      <rect x="24" y="8" width="16" height="48" rx="8" fill="#0c1527" />
-      <circle cx="32" cy="19" r="5" fill="#ef4565" />
-      <circle cx="32" cy="32" r="5" fill="#f4b740" />
-      <circle cx="32" cy="45" r="5" fill="#2fd48a" />
+      <rect width="64" height="64" rx="14" fill="#1a73e8" />
+      <rect x="24" y="9" width="16" height="46" rx="8" fill="#ffffff" />
+      <circle cx="32" cy="20" r="4.5" fill="#d93025" />
+      <circle cx="32" cy="32" r="4.5" fill="#fbbc04" />
+      <circle cx="32" cy="44" r="4.5" fill="#34a853" />
     </svg>
   );
 }

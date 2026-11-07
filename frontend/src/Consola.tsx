@@ -3,6 +3,7 @@ import type { MutableRefObject, ReactElement } from 'react';
 import { api, numero, reloj } from './api';
 import { puntoEnVia } from './geometria';
 import type { RedGeo } from './geometria';
+import { ImportarMapa } from './ImportarMapa';
 import { MapaTrafico } from './MapaTrafico';
 import type { CapasMapa, FuenteInstantanea, Hover, ManejadorMapa, PuntoMapa } from './MapaTrafico';
 import type { Criticos, Instantanea, Usuario } from './tipos';
@@ -48,15 +49,19 @@ interface Props {
   usuario: Usuario;
   conectado: boolean;
   coordenadasReales: boolean;
+  /** Se llama cuando el administrador termina de importar el mapa real: hay que recargar la red. */
+  alRedImportada: () => void;
 }
 
-export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReales }: Props): ReactElement {
+export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReales, alRedImportada }: Props): ReactElement {
+  const esAdmin = usuario.rol === 'ADMINISTRADOR';
+  const [verImportar, setVerImportar] = useState(false);
   const puedeOperar = usuario.rol !== 'ANALISTA';
   const mapa = useRef<ManejadorMapa>(null);
   const [herramienta, setHerramienta] = useState<Herramienta>('ver');
   const [gravedad, setGravedad] = useState(3);
   const [seleccion, setSeleccion] = useState<{ tipo: 'via' | 'nodo'; id: string } | null>(null);
-  const [capas, setCapas] = useState<CapasMapa>({ congestion: true, semaforos: true, rutas: true, calor: false });
+  const [capas, setCapas] = useState<CapasMapa>({ base: true, vehiculos: true, congestion: true, semaforos: true, rutas: true, calor: false });
   const [marcados, setMarcados] = useState<string[]>([]);
   const [hover, setHover] = useState<Hover | null>(null);
   const [pestana, setPestana] = useState<'resumen' | 'incidentes' | 'eventos'>('resumen');
@@ -259,7 +264,7 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
 
       <div className="mapa-contenedor">
         <MapaTrafico
-          ref={mapa} geo={geo} fuente={fuente} capas={capas} calor={criticos?.calor} criticos={puntosCriticos} seleccion={seleccion} marcados={marcados} cursor={cursor} enfocar={enfocar}
+          ref={mapa} geo={geo} origen={geo.red.origen} fuente={fuente} capas={capas} calor={criticos?.calor} criticos={puntosCriticos} seleccion={seleccion} marcados={marcados} cursor={cursor} enfocar={enfocar}
           onClickVia={alClickVia} onClickNodo={alClickNodo} onClickVacio={() => { if (herramienta === 'ver') setSeleccion(null); }} onHover={setHover}
         />
         {!conectado && <div className="desconectado" role="alert">Reconectando con el servidor…</div>}
@@ -274,16 +279,26 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
           <button aria-label="Alejar" onClick={() => mapa.current?.acercar(1 / 1.4)}>−</button>
           <button aria-label="Ajustar a la pantalla" onClick={() => mapa.current?.ajustar()}>⤢</button>
         </div>
-        <div className="leyenda-mapa" aria-label="Leyenda">
-          <label><input type="checkbox" checked={capas.congestion} onChange={(e) => setCapas({ ...capas, congestion: e.target.checked })} /> Congestión</label>
-          <span><i style={{ background: '#3a4f78' }} />Fluido <i style={{ background: '#dba521' }} />Moderado</span>
-          <span><i style={{ background: '#f0742f' }} />Alto <i style={{ background: '#e8344c' }} />Crítico</span>
+        {capas.base && geo.red.origen && <div className="atribucion">© colaboradores de OpenStreetMap</div>}
+        {esAdmin && !coordenadasReales && (
+          <div className="banner-mapa" role="region" aria-label="Mapa de demostración">
+            <b>Estás viendo una red de demostración (ficticia)</b>
+            <p>Para ver las calles reales de Cali, el servidor puede descargar el mapa de OpenStreetMap.</p>
+            {verImportar ? <ImportarMapa alTerminar={alRedImportada} /> : <button className="boton primario" onClick={() => setVerImportar(true)}>Usar el mapa real de Cali</button>}
+          </div>
+        )}
+        <div className="leyenda-mapa" aria-label="Capas del mapa">
+          {geo.red.origen && <label><input type="checkbox" checked={capas.base} onChange={(e) => setCapas({ ...capas, base: e.target.checked })} /> Mapa base</label>}
+          <label><input type="checkbox" checked={capas.congestion} onChange={(e) => setCapas({ ...capas, congestion: e.target.checked })} /> Tráfico</label>
+          <span><i style={{ background: '#34a853' }} />Fluido <i style={{ background: '#fbbc04' }} />Lento</span>
+          <span><i style={{ background: '#f57c00' }} />Denso <i style={{ background: '#d93025' }} />Detenido</span>
+          <label><input type="checkbox" checked={capas.vehiculos} onChange={(e) => setCapas({ ...capas, vehiculos: e.target.checked })} /> Vehículos</label>
           <label><input type="checkbox" checked={capas.semaforos} onChange={(e) => setCapas({ ...capas, semaforos: e.target.checked })} /> Semáforos</label>
           <label><input type="checkbox" checked={capas.rutas} onChange={(e) => setCapas({ ...capas, rutas: e.target.checked })} /> Rutas de emergencia</label>
           {criticos && criticos.total > 0 && <label><input type="checkbox" checked={capas.calor} onChange={(e) => setCapas({ ...capas, calor: e.target.checked })} /> Accidentalidad histórica</label>}
         </div>
         <div className="pista" role="status">
-          {mensaje ? <b style={{ color: mensaje.tipo === 'error' ? '#ffb3c0' : '#9ef0c7' }}>{mensaje.texto}</b> : <>{pista[herramienta]}</>}
+          {mensaje ? <b style={{ color: mensaje.tipo === 'error' ? '#d93025' : '#188038' }}>{mensaje.texto}</b> : <>{pista[herramienta]}</>}
           {herramienta === 'onda' && marcados.length >= 2 && puedeOperar && (
             <> <button className="boton chico primario" style={{ pointerEvents: 'auto', marginLeft: 8 }} onClick={() => { void llamar('POST', '/api/sim/semaforos/sincronizar', { nodos: marcados }, 'Onda verde aplicada'); setMarcados([]); }}>Aplicar onda verde ({marcados.length})</button></>
           )}
@@ -341,18 +356,18 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
               )}
               <section>
                 <h3>Estado de la red</h3>
-                <div className="grid-kpi" style={{ marginTop: 8 }}>
-                  <div className="kpi"><small>Vehículos</small><b data-testid="kpi-activos">{k.activos}</b></div>
-                  <div className="kpi"><small>Esperando entrar</small><b>{k.enEspera}</b></div>
-                  <div className="kpi"><small>Velocidad media</small><b>{numero(k.velocidadKmh, 1)}</b><span>km/h</span></div>
-                  <div className={'kpi' + (k.congestionadas > 5 ? ' peligro' : k.congestionadas > 0 ? ' alerta' : '')}><small>Vías congestionadas</small><b>{k.congestionadas}</b></div>
-                  <div className="kpi"><small>Semáforos</small><b>{k.semaforos}</b></div>
-                  <div className="kpi"><small>Emergencias activas</small><b>{k.emergencias}</b></div>
-                  <div className="kpi"><small>Viaje medio</small><b>{numero(k.viajeMedio, 0)}</b><span>s</span></div>
-                  <div className="kpi"><small>Espera media</small><b>{numero(k.esperaMedia, 0)}</b><span>s</span></div>
-                  <div className="kpi"><small>Viajes completados</small><b>{numero(k.completados)}</b></div>
-                  <div className="kpi"><small>Cambios de ruta</small><b>{numero(k.reruteos)}</b></div>
-                </div>
+                <dl className="metricas">
+                  <div><dt>Vehículos</dt><dd data-testid="kpi-activos">{k.activos}</dd></div>
+                  <div><dt>Esperando entrar</dt><dd>{k.enEspera}</dd></div>
+                  <div><dt>Velocidad media</dt><dd>{numero(k.velocidadKmh, 1)} km/h</dd></div>
+                  <div className={k.congestionadas > 5 ? 'peligro' : k.congestionadas > 0 ? 'alerta' : ''}><dt>Calles congestionadas</dt><dd>{k.congestionadas}</dd></div>
+                  <div><dt>Semáforos</dt><dd>{k.semaforos}</dd></div>
+                  <div><dt>Emergencias activas</dt><dd>{k.emergencias}</dd></div>
+                  <div><dt>Viaje medio</dt><dd>{numero(k.viajeMedio, 0)} s</dd></div>
+                  <div><dt>Espera media</dt><dd>{numero(k.esperaMedia, 0)} s</dd></div>
+                  <div><dt>Viajes completados</dt><dd>{numero(k.completados)}</dd></div>
+                  <div><dt>Cambios de ruta</dt><dd>{numero(k.reruteos)}</dd></div>
+                </dl>
               </section>
               <section>
                 <h3>Calles más congestionadas</h3>
@@ -363,7 +378,7 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
                         <div>
                           <button className="enlace" onClick={() => enfocarVia(r.via)}>{r.nombre}</button>
                           <small>{r.vehiculos} vehículos</small>
-                          <div className="barra-nivel"><i style={{ width: `${Math.round(r.puntaje * 100)}%`, background: r.puntaje > 0.75 ? '#e8344c' : r.puntaje > 0.5 ? '#f0742f' : '#dba521' }} /></div>
+                          <div className="barra-nivel"><i style={{ width: `${Math.round(r.puntaje * 100)}%`, background: r.puntaje > 0.75 ? '#d93025' : r.puntaje > 0.5 ? '#f57c00' : '#fbbc04' }} /></div>
                         </div>
                       </li>
                     ))}

@@ -1,10 +1,15 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import type { Instantanea } from './tipos';
+import { CapaTeselas } from './teselas';
+import type { Origen } from './teselas';
 import { luzDeFase, nodoCercano, puntoEnVia, viaCercana } from './geometria';
 import type { RedGeo } from './geometria';
 
 export interface CapasMapa {
+  /** Mapa base real (teselas de OpenStreetMap) debajo de las calles. Solo si la red tiene ubicación real. */
+  base: boolean;
+  vehiculos: boolean;
   congestion: boolean;
   semaforos: boolean;
   rutas: boolean;
@@ -32,8 +37,12 @@ export interface FuenteInstantanea {
 
 export interface PropsMapa {
   geo: RedGeo;
+  /** Ubicación real de la red (si se importó de OpenStreetMap). */
+  origen?: Origen | null;
   fuente: MutableRefObject<FuenteInstantanea>;
   capas: CapasMapa;
+  /** Plantilla de la URL de las teselas ({z}/{x}/{y}); por defecto la de OpenStreetMap. */
+  urlTeselas?: string;
   /** Puntos del mapa de calor de accidentes: [x, y, peso]. */
   calor?: number[][];
   criticos?: PuntoMapa[];
@@ -54,10 +63,12 @@ export interface ManejadorMapa {
   acercar: (factor: number) => void;
 }
 
-const COLOR_NIVEL = ['#3a4f78', '#dba521', '#f0742f', '#e8344c'];
-const COLOR_AUTO = ['#e8eef9', '#9ec5ff', '#c4cdd9', '#f2b8b8', '#a9e5c3', '#f7e08a'];
-const COLOR_GRAVEDAD = ['', '#f4b740', '#ff8a3d', '#ef4565'];
-const COLOR_LUZ = { verde: '#2fd48a', amarillo: '#f4b740', rojo: '#ef4565' } as const;
+/** Colores del tráfico, iguales a los de los mapas de navegación: verde fluido, amarillo, naranja y rojo. */
+const COLOR_NIVEL = ['#34a853', '#fbbc04', '#f57c00', '#d93025'];
+const COLOR_GRAVEDAD = ['', '#f9ab00', '#f57c00', '#d93025'];
+const COLOR_LUZ = { verde: '#34a853', amarillo: '#fbbc04', rojo: '#d93025' } as const;
+const COLOR_VEHICULO = ['#1a73e8', '#e8710a', '#8430ce'];
+export const URL_TESELAS: string = import.meta.env.VITE_TILES_URL ?? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const LARGO = [4.5, 2.2, 11, 5.5, 9, 4.8];
 const ANCHO = [1.9, 0.9, 2.5, 2.1, 2.5, 1.9];
 
@@ -82,6 +93,8 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
   const pinza = useRef<{ d: number; k: number } | null>(null);
   const ajustado = useRef(false);
   const ultimoEnfoque = useRef(0);
+  const teselas = useRef<CapaTeselas | null>(null);
+  if (teselas.current === null) teselas.current = new CapaTeselas(props.urlTeselas ?? URL_TESELAS);
 
   // ------------------------------------------------------------ vista
 
@@ -296,12 +309,17 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     const dpr = window.devicePixelRatio || 1;
     const { k, ox, oy } = vista.current;
     const px = 1 / k;
+    const { w, h } = tamano.current;
+    const conBase = capas.base && !!pr.origen;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#0c1322';
+    ctx.fillStyle = '#e8ecf1';
     ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    // mapa base real
+    if (conBase && pr.origen) teselas.current!.dibujar(ctx, pr.origen, { minX: -ox / k, minY: -oy / k, maxX: (w - ox) / k, maxY: (h - oy) / k }, k, dpr);
 
     const { inst, recibido } = pr.fuente.current;
     const niveles = new Map<number, number[]>();
@@ -310,36 +328,45 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     // mapa de calor de accidentes
     if (capas.calor && calorImg.current) {
       const ci = calorImg.current;
-      ctx.globalAlpha = 0.9;
+      ctx.globalAlpha = 0.85;
       ctx.drawImage(ci.lienzo, ci.x, ci.y, ci.lienzo.width / ci.k, ci.lienzo.height / ci.k);
       ctx.globalAlpha = 1;
     }
 
-    // calles: borde oscuro y relleno del color de la congestión
-    const ancho = Math.max(3.4, 5.4 * px);
-    for (let i = 0; i < geo.vias.length; i++) {
-      const g = geo.vias[i];
-      const mayor = g.via.clase.startsWith('primary') || g.via.clase.startsWith('trunk') || g.via.clase.startsWith('motorway') || g.via.clase.startsWith('secondary');
-      ctx.lineWidth = (mayor ? ancho * 1.2 : ancho) + Math.max(1.1, 1.8 * px);
-      ctx.strokeStyle = '#050912';
-      ctx.stroke(rutas.current[i]);
+    // sin mapa base se dibujan las calles (con mapa base ya vienen en la imagen)
+    const ancho = Math.max(3.4, 5.2 * px);
+    if (!conBase) {
+      for (let i = 0; i < geo.vias.length; i++) {
+        ctx.lineWidth = ancho + Math.max(1.0, 1.6 * px);
+        ctx.strokeStyle = '#b6bfcb';
+        ctx.stroke(rutas.current[i]);
+      }
+      for (let i = 0; i < geo.vias.length; i++) {
+        ctx.lineWidth = ancho;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke(rutas.current[i]);
+      }
     }
-    for (let i = 0; i < geo.vias.length; i++) {
-      const g = geo.vias[i];
-      const mayor = g.via.clase.startsWith('primary') || g.via.clase.startsWith('trunk') || g.via.clase.startsWith('motorway') || g.via.clase.startsWith('secondary');
-      const c = niveles.get(i);
-      ctx.lineWidth = mayor ? ancho * 1.2 : ancho;
-      ctx.strokeStyle = capas.congestion && c ? COLOR_NIVEL[c[1]] : COLOR_NIVEL[0];
-      ctx.stroke(rutas.current[i]);
+
+    // tráfico: una línea de color sobre cada calle
+    const grosor = Math.max(2.2, (conBase ? 3.6 : 2.8) * px);
+    if (capas.congestion) {
+      ctx.globalAlpha = 0.92;
+      for (let i = 0; i < geo.vias.length; i++) {
+        const c = niveles.get(i);
+        ctx.lineWidth = grosor;
+        ctx.strokeStyle = COLOR_NIVEL[c ? c[1] : 0];
+        ctx.stroke(rutas.current[i]);
+      }
+      ctx.globalAlpha = 1;
     }
 
     // sentido de las calles de un solo sentido
-    if (k > 0.3) {
-      ctx.fillStyle = 'rgba(220,232,255,0.55)';
+    if (k > 0.45) {
+      ctx.fillStyle = 'rgba(32,33,36,0.55)';
       for (const g of geo.vias) {
-        if (!g.via.clase && !g.unSentido) continue;
         if (!g.unSentido || g.largo < 40) continue;
-        const p = puntoEnVia(g, g.via.longitud * 0.5), s = Math.max(2.6, 3.6 * px);
+        const p = puntoEnVia(g, g.via.longitud * 0.5), s = Math.max(2.4, 3.2 * px);
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.ang);
@@ -354,14 +381,14 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     }
 
     // selección y hover
-    const resaltar = (sel: { tipo: string; id: string } | null | undefined, color: string, grosor: number) => {
+    const resaltar = (sel: { tipo: string; id: string } | null | undefined, color: string, extra: number) => {
       if (!sel) return;
       if (sel.tipo === 'via') {
         const i = geo.indiceVia.get(sel.id);
         if (i === undefined) return;
         ctx.strokeStyle = color;
-        ctx.lineWidth = ancho + grosor * px;
-        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = grosor + extra * px;
+        ctx.globalAlpha = 0.45;
         ctx.stroke(rutas.current[i]);
         ctx.globalAlpha = 1;
       } else {
@@ -374,80 +401,74 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
         ctx.stroke();
       }
     };
-    resaltar(hover.current, '#7cc4ff', 5);
-    resaltar(pr.seleccion, '#3ea6ff', 8);
+    resaltar(hover.current, '#1a73e8', 5);
+    resaltar(pr.seleccion, '#1a73e8', 9);
 
     // rutas prioritarias de emergencias
     if (inst && capas.rutas) {
       for (const e of inst.e) {
         if (e.atendiendo) continue;
-        ctx.save();
-        ctx.setLineDash([9 * px, 6 * px]);
-        ctx.lineDashOffset = -ahora / 40 * px;
-        ctx.lineWidth = Math.max(2.4, 3.4 * px);
-        ctx.strokeStyle = 'rgba(88,190,255,0.95)';
-        ctx.shadowColor = 'rgba(88,190,255,0.9)';
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
         const g0 = geo.vias[e.via];
-        if (!g0) { ctx.restore(); continue; }
-        const inicio = puntoEnVia(g0, e.pos);
-        ctx.moveTo(inicio.x, inicio.y);
-        const d0 = Math.min(g0.largo, e.pos * g0.escala);
-        for (let j = 1; j < g0.acum.length; j++) if (g0.acum[j] > d0) ctx.lineTo(g0.pts[j * 2], g0.pts[j * 2 + 1]);
-        for (let r = 1; r < e.ruta.length; r++) {
-          const g = geo.vias[e.ruta[r]];
-          if (!g) continue;
-          for (let j = 0; j < g.pts.length; j += 2) ctx.lineTo(g.pts[j], g.pts[j + 1]);
-        }
+        if (!g0) continue;
+        const trazar = () => {
+          ctx.beginPath();
+          const inicio = puntoEnVia(g0, e.pos);
+          ctx.moveTo(inicio.x, inicio.y);
+          const d0 = Math.min(g0.largo, e.pos * g0.escala);
+          for (let j = 1; j < g0.acum.length; j++) if (g0.acum[j] > d0) ctx.lineTo(g0.pts[j * 2], g0.pts[j * 2 + 1]);
+          for (let r = 1; r < e.ruta.length; r++) {
+            const g = geo.vias[e.ruta[r]];
+            if (!g) continue;
+            for (let j = 0; j < g.pts.length; j += 2) ctx.lineTo(g.pts[j], g.pts[j + 1]);
+          }
+        };
+        ctx.save();
+        ctx.lineWidth = Math.max(5, 7 * px);
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        trazar();
+        ctx.stroke();
+        ctx.lineWidth = Math.max(3, 4.2 * px);
+        ctx.strokeStyle = '#1a73e8';
+        ctx.setLineDash([10 * px, 6 * px]);
+        ctx.lineDashOffset = (-ahora / 40) * px;
+        trazar();
         ctx.stroke();
         ctx.restore();
       }
     }
 
-    // intersecciones
-    const rn = Math.max(3.2, 4.2 * px);
+    // intersecciones: en el editor todas; en la consola solo entradas, salidas y bases
+    const rn = Math.max(3.4, 4.6 * px);
     for (const n of geo.nodos) {
       if (n.servicios.length > 0) continue;
+      const entrada = n.tipo === 'ENTRADA_SALIDA';
+      if (!pr.editor && !entrada) continue;
       ctx.beginPath();
-      ctx.arc(n.x, n.y, rn, 0, Math.PI * 2);
-      if (n.tipo === 'ENTRADA_SALIDA') {
-        ctx.fillStyle = '#3ea6ff';
-        ctx.fill();
-        ctx.strokeStyle = '#0b1c33';
-        ctx.lineWidth = 1.4 * px;
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = n.semaforizada ? '#0c1322' : '#26354f';
-        ctx.fill();
-        ctx.strokeStyle = n.semaforizada ? '#8da6cc' : '#56688a';
-        ctx.lineWidth = 1.5 * px;
-        ctx.stroke();
-      }
+      ctx.arc(n.x, n.y, entrada ? rn * 1.15 : rn, 0, Math.PI * 2);
+      ctx.fillStyle = entrada ? '#1a73e8' : '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = entrada ? '#ffffff' : '#5f6368';
+      ctx.lineWidth = 1.6 * px;
+      ctx.stroke();
     }
 
     // semáforos: una luz en la línea de pare de cada aproximación
-    if (inst && capas.semaforos) {
-      const r = Math.max(2.3, 3.3 * px);
+    if (inst && capas.semaforos && k > 0.35) {
+      const r = Math.max(2.3, 3.2 * px);
       for (const s of inst.s) {
         const manual = s[2] >= 0;
         for (const vi of geo.entrantes[s[0]] ?? []) {
           const g = geo.vias[vi];
           const p = puntoEnVia(g, Math.max(0, g.via.longitud - 3.5));
-          const nx = -Math.sin(p.ang) * 3.2, ny = Math.cos(p.ang) * 3.2;
+          const nx = -Math.sin(p.ang) * 3.4, ny = Math.cos(p.ang) * 3.4;
           const luz = luzDeFase(s[1], g.grupo);
           ctx.beginPath();
           ctx.arc(p.x + nx, p.y + ny, r, 0, Math.PI * 2);
           ctx.fillStyle = COLOR_LUZ[luz];
-          ctx.shadowColor = COLOR_LUZ[luz];
-          ctx.shadowBlur = luz === 'rojo' ? 3 : 8;
           ctx.fill();
-          ctx.shadowBlur = 0;
-          if (manual) {
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1.2 * px;
-            ctx.stroke();
-          }
+          ctx.lineWidth = 1.1 * px;
+          ctx.strokeStyle = manual ? '#202124' : '#ffffff';
+          ctx.stroke();
         }
       }
     }
@@ -455,42 +476,44 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     // bases de emergencia
     for (const n of geo.nodos) {
       if (n.servicios.length === 0) continue;
-      const r = Math.max(6.5, 8.5 * px);
+      const r = Math.max(7, 9.5 * px);
       ctx.beginPath();
       ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#f3f7ff';
+      ctx.fillStyle = n.servicios.includes('hospital') ? '#d93025' : '#1a73e8';
       ctx.fill();
-      ctx.lineWidth = 1.6 * px;
-      ctx.strokeStyle = '#0b1220';
+      ctx.lineWidth = 2 * px;
+      ctx.strokeStyle = '#ffffff';
       ctx.stroke();
       ctx.font = `700 ${Math.max(7, 9.5 * px)}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = n.servicios.includes('hospital') ? '#d62a45' : '#1c4fa8';
+      ctx.fillStyle = '#ffffff';
       ctx.fillText(n.servicios.map((x) => (x === 'hospital' ? 'H' : x === 'bomberos' ? 'B' : 'P')).join(''), n.x, n.y + 0.4 * px);
     }
 
-    // vehículos
     if (inst) {
       const dt = inst.corriendo ? Math.min(0.15, Math.max(0, (ahora - recibido) / 1000)) * inst.velocidad : 0;
-      const detalle = k > 0.18;
-      for (const v of inst.v) {
-        const g = geo.vias[v[1]];
-        if (!g) continue;
-        const pos = Math.min(g.via.longitud, v[2] + v[3] * dt);
-        const p = puntoEnVia(g, pos);
-        const t = v[4];
-        const largo = Math.max(LARGO[t], (detalle ? 7 : 4) * px), anch = Math.max(ANCHO[t], (detalle ? 3.5 : 2.5) * px);
-        ctx.save();
-        ctx.translate(p.x - Math.cos(p.ang) * largo * 0.5, p.y - Math.sin(p.ang) * largo * 0.5);
-        ctx.rotate(p.ang);
-        ctx.fillStyle = t === 1 ? '#ff9f43' : t === 2 ? '#f4c542' : COLOR_AUTO[v[0] % COLOR_AUTO.length];
-        ctx.fillRect(-largo / 2, -anch / 2, largo, anch);
-        if (detalle && v[3] < 0.6) {
-          ctx.fillStyle = '#ff3b57';
-          ctx.fillRect(-largo / 2, -anch / 2, largo * 0.2, anch);
+      // vehículos
+      if (capas.vehiculos) {
+        const detalle = k > 0.18;
+        for (const v of inst.v) {
+          const g = geo.vias[v[1]];
+          if (!g) continue;
+          const p = puntoEnVia(g, Math.min(g.via.longitud, v[2] + v[3] * dt));
+          const t = v[4];
+          const largo = Math.max(LARGO[t], (detalle ? 6.5 : 4) * px), anch = Math.max(ANCHO[t], (detalle ? 3.4 : 2.4) * px);
+          ctx.save();
+          ctx.translate(p.x - Math.cos(p.ang) * largo * 0.5, p.y - Math.sin(p.ang) * largo * 0.5);
+          ctx.rotate(p.ang);
+          ctx.fillStyle = COLOR_VEHICULO[t === 1 ? 1 : t === 2 ? 2 : 0];
+          ctx.fillRect(-largo / 2, -anch / 2, largo, anch);
+          if (detalle) {
+            ctx.lineWidth = 0.9 * px;
+            ctx.strokeStyle = '#ffffff';
+            ctx.strokeRect(-largo / 2, -anch / 2, largo, anch);
+          }
+          ctx.restore();
         }
-        ctx.restore();
       }
       // emergencias
       const destello = Math.floor(ahora / 230) % 2 === 0;
@@ -502,41 +525,38 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
         ctx.save();
         ctx.translate(p.x - Math.cos(p.ang) * largo * 0.5, p.y - Math.sin(p.ang) * largo * 0.5);
         ctx.rotate(p.ang);
-        ctx.shadowColor = destello ? '#ff3b57' : '#3ea6ff';
-        ctx.shadowBlur = 14;
-        ctx.fillStyle = e.tipo === 4 ? '#e03a3a' : e.tipo === 5 ? '#2f6fe0' : '#ffffff';
+        ctx.fillStyle = e.tipo === 4 ? '#d93025' : e.tipo === 5 ? '#1967d2' : '#ffffff';
         ctx.fillRect(-largo / 2, -anch / 2, largo, anch);
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = destello ? '#ff3b57' : '#3ea6ff';
-        ctx.fillRect(-largo * 0.1, -anch / 2, largo * 0.22, anch);
+        ctx.lineWidth = 1.2 * px;
+        ctx.strokeStyle = '#202124';
+        ctx.strokeRect(-largo / 2, -anch / 2, largo, anch);
+        ctx.fillStyle = destello ? '#d93025' : '#1a73e8';
+        ctx.fillRect(-largo * 0.12, -anch / 2, largo * 0.24, anch);
         ctx.restore();
       }
-      // incidentes
+      // incidentes: marcador redondo con signo de exclamación
       for (const i of inst.i) {
         const g = geo.vias[i.via];
         if (!g) continue;
         const p = puntoEnVia(g, i.pos);
-        const pulso = 1 + 0.18 * Math.sin(ahora / 180);
-        const r = Math.max(8, 11 * px) * pulso;
+        const pulso = 1 + 0.12 * Math.sin(ahora / 200);
+        const r = Math.max(8, 10.5 * px) * pulso;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r * 1.7, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(239,69,101,0.18)';
+        ctx.arc(p.x, p.y, r * 1.8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(217,48,37,0.16)';
         ctx.fill();
         ctx.beginPath();
-        ctx.moveTo(p.x, p.y - r);
-        ctx.lineTo(p.x + r * 0.95, p.y + r * 0.7);
-        ctx.lineTo(p.x - r * 0.95, p.y + r * 0.7);
-        ctx.closePath();
-        ctx.fillStyle = i.estado === 'EN_ATENCION' ? '#3ea6ff' : COLOR_GRAVEDAD[i.gravedad];
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = i.estado === 'EN_ATENCION' ? '#1a73e8' : COLOR_GRAVEDAD[i.gravedad];
         ctx.fill();
-        ctx.lineWidth = 1.6 * px;
-        ctx.strokeStyle = '#0b1220';
+        ctx.lineWidth = 2 * px;
+        ctx.strokeStyle = '#ffffff';
         ctx.stroke();
-        ctx.fillStyle = '#0b1220';
-        ctx.font = `800 ${r * 1.05}px system-ui, sans-serif`;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `800 ${r * 1.2}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('!', p.x, p.y + r * 0.2);
+        ctx.fillText('!', p.x, p.y + r * 0.08);
       }
     }
 
@@ -544,13 +564,13 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     if (capas.calor && pr.criticos) {
       pr.criticos.slice(0, 10).forEach((c, i) => {
         ctx.beginPath();
-        ctx.arc(c.x, c.y, Math.max(9, 12 * px), 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(12,19,34,0.85)';
+        ctx.arc(c.x, c.y, Math.max(9, 11.5 * px), 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
         ctx.fill();
-        ctx.strokeStyle = '#ff7a45';
-        ctx.lineWidth = 2 * px;
+        ctx.strokeStyle = '#d93025';
+        ctx.lineWidth = 2.2 * px;
         ctx.stroke();
-        ctx.fillStyle = '#ffb08a';
+        ctx.fillStyle = '#d93025';
         ctx.font = `700 ${Math.max(9, 11.5 * px)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -565,9 +585,12 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
       const nodo = geo.nodos[n];
       ctx.beginPath();
       ctx.arc(nodo.x, nodo.y, 11 * px, 0, Math.PI * 2);
-      ctx.fillStyle = '#3ea6ff';
+      ctx.fillStyle = '#1a73e8';
       ctx.fill();
-      ctx.fillStyle = '#06101f';
+      ctx.lineWidth = 2 * px;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
       ctx.font = `800 ${12 * px}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';

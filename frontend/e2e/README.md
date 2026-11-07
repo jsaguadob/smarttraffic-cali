@@ -18,3 +18,17 @@ NODE_PATH=/tmp/e2e/node_modules node /ruta/al/proyecto/frontend/e2e/recorrido-2.
 ```
 
 Variables: `ST_URL` (por defecto `http://localhost:8095`) y `CAPTURAS` (carpeta de capturas, por defecto `./capturas`).
+
+## Alineación del mapa base real (`recorrido-teselas.cjs`)
+
+Comprueba que las teselas del mapa se pintan exactamente debajo de las calles (error medido: medio píxel). Como aquí no se usa
+internet, un servidor de teselas **falso** (`servidor_teselas.py`, necesita Pillow) dibuja una marca roja en la latitud y longitud
+de una intersección, calculada con matemática independiente de la de la pantalla.
+
+```bash
+# servidor de teselas falso: puerto, y la posición (x, y en metros locales) de la intersección objetivo (N11 = 261 211)
+python3 frontend/e2e/servidor_teselas.py 9099 261 211 &
+# pantalla compilada apuntando a ese servidor, y el servidor Java en modo demostración en el puerto 8097
+cd frontend && VITE_TILES_URL='http://localhost:9099/{z}/{x}/{y}.png' npx vite build --outDir /tmp/dist-tiles
+# ... arrancar el servidor Java con SMARTTRAFFIC_STATIC=/tmp/dist-tiles SMARTTRAFFIC_PORT=8097 y correr recorrido-teselas.cjs
+```

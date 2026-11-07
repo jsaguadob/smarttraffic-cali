@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { api, numero } from './api';
 import { construirGeo } from './geometria';
+import { ImportarMapa } from './ImportarMapa';
 import { MapaTrafico } from './MapaTrafico';
 import type { CapasMapa, FuenteInstantanea, ManejadorMapa } from './MapaTrafico';
 import type { NodoRed, Red, ResultadoEdicion } from './tipos';
@@ -15,7 +16,7 @@ const HERRAMIENTAS: [Herr, string, string, string][] = [
   ['eliminar', 'Borrar', 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', 'Haz clic en una intersección o en una calle para borrarla.'],
 ];
 
-const CAPAS: CapasMapa = { congestion: false, semaforos: false, rutas: false, calor: false };
+const CAPAS: CapasMapa = { base: true, vehiculos: false, congestion: false, semaforos: false, rutas: false, calor: false };
 
 function moverLocal(red: Red, id: string, x: number, y: number): Red {
   return {
@@ -31,7 +32,7 @@ function moverLocal(red: Red, id: string, x: number, y: number): Red {
   };
 }
 
-export function Editor({ red, recargar }: { red: Red; recargar: () => Promise<void> }): ReactElement {
+export function Editor({ red, recargar, alMapaImportado }: { red: Red; recargar: () => Promise<void>; alMapaImportado: () => void }): ReactElement {
   const mapa = useRef<ManejadorMapa>(null);
   const fuente = useRef<FuenteInstantanea>({ inst: null, recibido: 0 });
   const [local, setLocal] = useState<Red>(red);
@@ -130,7 +131,7 @@ export function Editor({ red, recargar }: { red: Red; recargar: () => Promise<vo
       </div>
       <div className="mapa-contenedor">
         <MapaTrafico
-          ref={mapa} geo={geo} fuente={fuente} capas={CAPAS} editor seleccion={sel} marcados={origen ? [origen] : []} cursor={herr === 'seleccionar' ? 'grab' : 'crosshair'}
+          ref={mapa} geo={geo} origen={local.origen} fuente={fuente} capas={CAPAS} editor seleccion={sel} marcados={origen ? [origen] : []} cursor={herr === 'seleccionar' ? 'grab' : 'crosshair'}
           onClickNodo={alClickNodo} onClickVia={alClickVia} onClickVacio={alClickVacio} onMoverNodo={alMover}
         />
         <div className="zoom">
@@ -163,7 +164,11 @@ export function Editor({ red, recargar }: { red: Red; recargar: () => Promise<vo
             </section>
           )}
           <section>
-            <h3>Importar datos</h3>
+            <h3>Mapa real de Cali</h3>
+            <div style={{ marginTop: 8 }}><ImportarMapa alTerminar={alMapaImportado} /></div>
+          </section>
+          <section>
+            <h3>Importar archivos</h3>
             <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
               <label className="campo">Red de calles (JSON de SmartTraffic)
                 <input type="file" accept=".json,application/json" onChange={(e) => leerArchivo(e, 'red')} aria-label="Importar red" />

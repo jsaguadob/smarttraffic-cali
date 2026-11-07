@@ -21,7 +21,7 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   const aPantalla = (x, y) => p.evaluate((x, y) => window.__mapa.aPantalla(x, y), x, y);
   const lienzo = async () => (await (await p.$('canvas[data-testid="mapa"]')).boundingBox());
   const clicEnMapa = async (x, y) => { const pt = await aPantalla(x, y), r = await lienzo(); await p.mouse.click(r.x + pt.x, r.y + pt.y); };
-  const pixeles = () => p.evaluate(() => { const c = document.querySelector('canvas[data-testid="mapa"]'); const g = c.getContext('2d'); const d = g.getImageData(c.width * 0.3, c.height * 0.3, c.width * 0.4, c.height * 0.4).data; let n = 0; const bg = [12, 19, 34]; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 40) n++; return n; });
+  const pixeles = () => p.evaluate(() => { const c = document.querySelector('canvas[data-testid="mapa"]'); const g = c.getContext('2d'); const d = g.getImageData(c.width * 0.3, c.height * 0.3, c.width * 0.4, c.height * 0.4).data; let n = 0; const bg = [232, 236, 241]; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 40) n++; return n; });
 
   // ------------------------------------------------ ingreso
   await p.goto(URL, { waitUntil: 'domcontentloaded' });
@@ -62,7 +62,7 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   await clic('Resumen', 'button');
   // emergencia manual
   await p.keyboard.press('e'); const n33 = red.intersecciones.find((n) => n.id === 'N33'); await clicEnMapa(n33.x, n33.y);
-  ok(await esperar(async () => ((await api('GET', '/api/sim/estado')).cuerpo.e || []).length >= 2, 5000), 'la herramienta Ambulancia despacha un vehículo de emergencia a la intersección elegida');
+  ok(await esperar(async () => ((await api('GET', '/api/sim/estado')).cuerpo.ev || []).some((x) => /Ambulancia EMG-\d+ sale de .* hacia Calle 5 con Carrera 39/.test(x.msg)), 6000), 'la herramienta Ambulancia despacha un vehículo de emergencia a la intersección elegida');
   await dormir(3000); await foto('5-emergencias');
   // semáforos
   await clic('Tiempo fijo', 'button');

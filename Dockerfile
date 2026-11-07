@@ -11,6 +11,8 @@ COPY --from=compilar /app/backend/out/main /app/clases
 COPY --from=compilar /app/backend/lib/h2.jar /app/backend/lib/postgresql.jar /app/lib/
 USER smarttraffic
 WORKDIR /datos
+# El mapa de una ciudad en JSON ocupa bastante memoria al convertirse: se permite usar más de la cuarta parte por defecto.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70"
 # El puerto lo define la plataforma con la variable PORT (si no existe, 8080).
 EXPOSE 8080
 CMD ["java", "-cp", "/app/clases:/app/lib/h2.jar:/app/lib/postgresql.jar", "smarttraffic.Main"]

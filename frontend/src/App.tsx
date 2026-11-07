@@ -51,6 +51,12 @@ export function App(): ReactElement {
     setRed(await api<Red>('GET', '/api/red'));
   }, []);
 
+  /** Después de importar un mapa: se recargan la red y la información de si tiene ubicación real. */
+  const recargarTodo = useCallback(async () => {
+    await cargarRed();
+    setConfig(await api<Config>('GET', '/api/config'));
+  }, [cargarRed]);
+
   useEffect(() => {
     if (!usuario) return;
     void cargarRed();
@@ -109,18 +115,18 @@ export function App(): ReactElement {
         {!geo || !inst ? (
           <div className="pagina"><div className="aviso">Cargando la red vial…</div></div>
         ) : visible === 'consola' ? (
-          <Consola geo={geo} fuente={fuente} inst={inst} usuario={usuario} conectado={conectado} coordenadasReales={config?.coordenadasReales ?? false} />
+          <Consola geo={geo} fuente={fuente} inst={inst} usuario={usuario} conectado={conectado} coordenadasReales={config?.coordenadasReales ?? false} alRedImportada={() => void recargarTodo()} />
         ) : visible === 'comparar' ? (
           <Comparar geo={geo} />
         ) : visible === 'editor' ? (
-          <Editor red={red!} recargar={cargarRed} />
+          <Editor red={red!} recargar={cargarRed} alMapaImportado={() => void recargarTodo()} />
         ) : (
           <Usuarios yo={usuario} />
         )}
       </div>
       <footer className="pie">
         <span>SmartTraffic {config?.version} · código abierto (MIT)</span>
-        {config?.coordenadasReales ? <span>Mapa © colaboradores de OpenStreetMap (ODbL)</span> : <span>Red de demostración ficticia: para el mapa real de Cali importa los datos de OpenStreetMap</span>}
+        {config?.coordenadasReales ? <span>Mapa © colaboradores de OpenStreetMap (ODbL)</span> : <span>Red de demostración (ficticia). El administrador puede cargar el mapa real de Cali desde el centro de control.</span>}
         <span>El flujo mostrado es una estimación de un modelo, no una medición del tráfico real.</span>
       </footer>
     </div>

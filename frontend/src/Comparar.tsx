@@ -140,8 +140,8 @@ export function Comparar({ geo }: { geo: RedGeo }): ReactElement {
                 ]} />
               </section>
               <div style={{ display: 'grid', gap: 16 }}>
-                <GraficaLineas titulo="Velocidad media de la red" unidad="km/h" series={[{ nombre: a.nombre, color: '#ff8a3d', datos: a.serie.map((m) => ({ x: m.t, y: m.velocidadKmh })) }, { nombre: b.nombre, color: '#3ea6ff', datos: b.serie.map((m) => ({ x: m.t, y: m.velocidadKmh })) }]} />
-                <GraficaLineas titulo="Calles congestionadas" unidad="calles" series={[{ nombre: a.nombre, color: '#ff8a3d', datos: a.serie.map((m) => ({ x: m.t, y: m.congestionadas })) }, { nombre: b.nombre, color: '#3ea6ff', datos: b.serie.map((m) => ({ x: m.t, y: m.congestionadas })) }]} />
+                <GraficaLineas titulo="Velocidad media de la red" unidad="km/h" series={[{ nombre: a.nombre, color: '#e8710a', datos: a.serie.map((m) => ({ x: m.t, y: m.velocidadKmh })) }, { nombre: b.nombre, color: '#1a73e8', datos: b.serie.map((m) => ({ x: m.t, y: m.velocidadKmh })) }]} />
+                <GraficaLineas titulo="Calles congestionadas" unidad="calles" series={[{ nombre: a.nombre, color: '#e8710a', datos: a.serie.map((m) => ({ x: m.t, y: m.congestionadas })) }, { nombre: b.nombre, color: '#1a73e8', datos: b.serie.map((m) => ({ x: m.t, y: m.congestionadas })) }]} />
               </div>
             </div>
             <p className="aviso">Ambos escenarios recibieron {numero(a.generados)} vehículos. SmartTraffic hizo {numero(b.reruteos)} cambios de ruta. «Tiempo de viaje» incluye a los vehículos que aún no terminaban, para no favorecer al escenario que deja más gente atascada.</p>

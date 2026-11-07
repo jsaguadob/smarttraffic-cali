@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "node scripts/verificar-entorno.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
-    "verificar-entorno": "node scripts/verificar-entorno.mjs"
+    "verificar-entorno": "node scripts/verificar-entorno.mjs",
+    "prueba": "node --experimental-strip-types pruebas/teselas.prueba.mjs"
   },
   "dependencies": {
     "react": "18.3.1",

@@ -59,13 +59,13 @@ public final class ImportarCali {
                 calles = Files.readString(Path.of(callesArchivo));
             } else {
                 out.println("Descargando las calles de OpenStreetMap (puede tardar un par de minutos)...");
-                calles = descargar(overpass, ImportadorOsm.consultaCalles(bbox[0], bbox[1], bbox[2], bbox[3]));
+                calles = descargar(overpass, ImportadorOsm.consultaCalles(bbox[0], bbox[1], bbox[2], bbox[3]), 3, 5000);
             }
             if (serviciosArchivo != null) {
                 servicios = Files.readString(Path.of(serviciosArchivo));
             } else if (callesArchivo == null) {
                 out.println("Descargando hospitales, bomberos y policía...");
-                servicios = descargar(overpass, ImportadorOsm.consultaServicios(bbox[0], bbox[1], bbox[2], bbox[3]));
+                servicios = descargar(overpass, ImportadorOsm.consultaServicios(bbox[0], bbox[1], bbox[2], bbox[3]), 3, 5000);
             } else {
                 servicios = null;
             }
@@ -106,13 +106,14 @@ public final class ImportarCali {
         return b;
     }
 
-    private static String descargar(String url, String consulta) throws IOException, InterruptedException {
+    /** Consulta la API Overpass (POST). Reintenta {@code intentos} veces esperando {@code esperaBaseMs} × número de intento. */
+    public static String descargar(String url, String consulta, int intentos, long esperaBaseMs) throws IOException, InterruptedException {
         HttpClient cliente = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build();
         HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(240))
                 .header("Content-Type", "application/x-www-form-urlencoded").header("User-Agent", "SmartTraffic/1.0 (proyecto academico de estructuras de datos)")
                 .POST(HttpRequest.BodyPublishers.ofString("data=" + URLEncoder.encode(consulta, StandardCharsets.UTF_8))).build();
         IOException ultimo = null;
-        for (int intento = 1; intento <= 3; intento++) {
+        for (int intento = 1; intento <= intentos; intento++) {
             try {
                 HttpResponse<String> r = cliente.send(req, HttpResponse.BodyHandlers.ofString());
                 if (r.statusCode() == 200) return r.body();
@@ -120,7 +121,7 @@ public final class ImportarCali {
             } catch (IOException e) {
                 ultimo = new IOException("No se pudo conectar con el servicio de mapas (" + e.getMessage() + "). Revisa tu conexión a internet.");
             }
-            Thread.sleep(5000L * intento);
+            if (intento < intentos) Thread.sleep(esperaBaseMs * intento);
         }
         throw ultimo;
     }
