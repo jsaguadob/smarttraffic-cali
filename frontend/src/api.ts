@@ -31,7 +31,8 @@ export async function api<T>(metodo: string, ruta: string, cuerpo?: unknown): Pr
   try {
     r = await fetch(BASE + ruta, { method: metodo, headers: cab, body: cuerpo === undefined ? undefined : typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo) });
   } catch {
-    throw new ErrorApi(0, 'No se pudo conectar con el servidor. Revisa que esté en marcha.');
+    // El navegador no distingue un servidor apagado de uno que no autoriza a esta página (CORS): se mencionan ambas causas.
+    throw new ErrorApi(0, `No se pudo conectar con el servidor (${BASE || 'este mismo sitio'}). Revisa que esté en marcha, que la dirección sea la correcta y que el servidor autorice a esta página (SMARTTRAFFIC_CORS).`);
   }
   let datos: unknown = null;
   const texto = await r.text();

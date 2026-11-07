@@ -83,6 +83,21 @@ Los accidentes (datos abiertos de la Alcaldía, CSV o GeoJSON con latitud y long
 5. Despliega. Si falta `VITE_API_URL`, la compilación se detiene con un mensaje que lo explica (a propósito).
 6. Copia las direcciones del sitio y de la rama a `SMARTTRAFFIC_CORS` en el servidor.
 
+## Si la pantalla dice «No se pudo conectar con el servidor»
+
+El mensaje indica la dirección a la que intentó conectarse. Revisa en este orden:
+
+1. **¿Hay un servidor?** Abre `DIRECCIÓN/api/salud` en el navegador (con la dirección de `VITE_API_URL`). Debe mostrar
+   `{"ok":true,"version":"1.0.0"}`. Si no responde, el servidor está apagado, la dirección está mal escrita o es un
+   valor de relleno. Netlify solo aloja la pantalla.
+2. **¿Autoriza a la pantalla?** Si el paso 1 funciona pero el ingreso falla, abre las herramientas del navegador
+   (F12 → Consola). Un mensaje «blocked by CORS policy» significa que la dirección de la pantalla no está en
+   `SMARTTRAFFIC_CORS` del servidor, o está mal escrita (sin `/` al final, con `https://`, sin espacios).
+3. **¿Cambiaste `VITE_API_URL`?** Es una variable de *compilación*: hay que volver a desplegar la pantalla en
+   Netlify (*Trigger deploy*) para que el cambio se aplique.
+4. **¿Es HTTPS?** Una página HTTPS no puede llamar a un servidor HTTP: el navegador lo bloquea.
+5. **¿Neon estaba suspendida?** La primera petición tras una pausa puede tardar unos segundos; reintenta.
+
 ## Seguridad
 
 - Las contraseñas se guardan con PBKDF2 (600.000 iteraciones); las sesiones son JWT firmados con HS256 y duran 8 horas.
