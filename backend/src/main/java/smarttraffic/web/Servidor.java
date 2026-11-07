@@ -43,6 +43,8 @@ public final class Servidor implements AutoCloseable {
         public String dirEstatico = "../frontend/dist";
         public String secretoJwt = Seguridad.secretoAleatorio();
         public String origenCors = null;
+        /** Modo de demostración: el ingreso ofrece entrar con un clic como cada rol (solo para presentaciones). */
+        public boolean demo = false;
     }
 
     /** Respuesta con estado distinto de 200. */
@@ -186,7 +188,7 @@ public final class Servidor implements AutoCloseable {
     private void registrarRutas() {
         // ---- públicas
         ruta("GET", "/api/salud", null, p -> Json.obj("ok", true, "version", VERSION));
-        ruta("GET", "/api/config", null, p -> Json.obj("nombre", "SmartTraffic", "version", VERSION, "atribucion", "© colaboradores de OpenStreetMap (ODbL)", "coordenadasReales", servicioRed.proyeccion() != null));
+        ruta("GET", "/api/config", null, p -> Json.obj("nombre", "SmartTraffic", "version", VERSION, "atribucion", "© colaboradores de OpenStreetMap (ODbL)", "coordenadasReales", servicioRed.proyeccion() != null, "demo", opc.demo));
         ruta("POST", "/api/auth/login", null, this::login);
         // ---- cualquier usuario con sesión
         ruta("GET", "/api/auth/yo", TODOS, p -> usuarioJson(p.usuario));

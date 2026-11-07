@@ -53,6 +53,7 @@ public final class Main {
         opc.puerto = Integer.parseInt(env("SMARTTRAFFIC_PORT", "8080"));
         opc.dirEstatico = env("SMARTTRAFFIC_STATIC", "../frontend/dist");
         opc.origenCors = System.getenv("SMARTTRAFFIC_CORS");
+        opc.demo = "1".equals(System.getenv("SMARTTRAFFIC_DEMO"));
         String secreto = System.getenv("SMARTTRAFFIC_JWT_SECRET");
         if (secreto != null && secreto.length() >= 32) opc.secretoJwt = secreto;
         else System.out.println("Aviso: SMARTTRAFFIC_JWT_SECRET no está definido (o es corto): las sesiones se cerrarán al reiniciar el servidor.");
