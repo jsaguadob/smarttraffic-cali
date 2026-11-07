@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import smarttraffic.red.Via;
 import smarttraffic.datos.ProyeccionLocal;
 import smarttraffic.datos.RedVialJson;
 import smarttraffic.datos.Repositorio;
@@ -36,6 +37,66 @@ public final class ServicioRed {
 
     public synchronized RedVialJson.Cargada copia() {
         return RedVialJson.leer(RedVialJson.escribir(red, proy));
+    }
+
+    private static String normalizar(String s) {
+        return java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "").toLowerCase().replaceAll("[^a-z0-9 ]", " ").trim().replaceAll("\\s+", " ");
+    }
+
+    /** Busca calles, intersecciones y bases de emergencia por nombre (sin tildes ni mayúsculas). Todas las palabras deben aparecer. */
+    public synchronized List<Map<String, Object>> buscarLocal(String consulta, int max) {
+        String q = normalizar(consulta);
+        if (q.isEmpty()) return List.of();
+        String[] palabras = q.split(" ");
+        record Hallazgo(int puntaje, Map<String, Object> dato) {}
+        List<Hallazgo> hallazgos = new ArrayList<>();
+        java.util.Map<String, Via> porCalle = new java.util.LinkedHashMap<>();
+        for (Via v : red.vias()) {
+            if (v.nombre().isBlank() || v.nombre().equals(v.id())) continue;
+            Via previa = porCalle.get(v.nombre());
+            if (previa == null || v.longitud() > previa.longitud()) porCalle.put(v.nombre(), v);
+        }
+        for (Via v : porCalle.values()) {
+            String n = normalizar(v.nombre());
+            if (!contiene(n, palabras)) continue;
+            double[] p = v.puntoEn(v.longitudGeometria() / 2);
+            hallazgos.add(new Hallazgo(puntaje(n, q, 0), dato("calle", v.nombre(), "", p[0], p[1])));
+        }
+        for (Interseccion i : red.intersecciones()) {
+            String n = normalizar(i.nombre());
+            if (!contiene(n, palabras)) continue;
+            hallazgos.add(new Hallazgo(puntaje(n, q, i.servicios().isEmpty() ? 1 : 0), dato(i.servicios().isEmpty() ? "interseccion" : "servicio", i.nombre(), "", i.x(), i.y())));
+        }
+        hallazgos.sort((a, b) -> a.puntaje() != b.puntaje() ? Integer.compare(a.puntaje(), b.puntaje()) : ((String) a.dato().get("nombre")).compareTo((String) b.dato().get("nombre")));
+        List<Map<String, Object>> salida = new ArrayList<>();
+        for (Hallazgo h : hallazgos) {
+            if (salida.size() >= max) break;
+            salida.add(h.dato());
+        }
+        return salida;
+    }
+
+    private static boolean contiene(String nombre, String[] palabras) {
+        for (String p : palabras) if (!nombre.contains(p)) return false;
+        return true;
+    }
+
+    /** Menor es mejor: primero los que empiezan igual que lo escrito, luego los nombres más cortos. */
+    private static int puntaje(String nombre, String q, int tipo) {
+        return (nombre.startsWith(q) ? 0 : nombre.contains(" " + q) ? 1 : 2) * 1000 + tipo * 300 + Math.min(299, nombre.length());
+    }
+
+    private Map<String, Object> dato(String tipo, String nombre, String detalle, double x, double y) {
+        Map<String, Object> m = Json.obj("tipo", tipo, "nombre", nombre, "detalle", detalle, "x", x, "y", y);
+        if (proy != null) { m.put("lat", proy.lat(y)); m.put("lon", proy.lon(x)); }
+        return m;
+    }
+
+    /** Límites de la red en metros locales: {minX, minY, maxX, maxY}. */
+    public synchronized double[] caja() {
+        double a = Double.MAX_VALUE, b = Double.MAX_VALUE, c = -Double.MAX_VALUE, d = -Double.MAX_VALUE;
+        for (Interseccion i : red.intersecciones()) { a = Math.min(a, i.x()); b = Math.min(b, i.y()); c = Math.max(c, i.x()); d = Math.max(d, i.y()); }
+        return new double[] {a, b, c, d};
     }
 
     public synchronized ProyeccionLocal proyeccion() {

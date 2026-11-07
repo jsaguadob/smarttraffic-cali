@@ -103,8 +103,8 @@ public final class GestorSimulacion implements AutoCloseable {
         return ultima;
     }
 
-    /** Ejecuta una operación en el hilo de la simulación y devuelve su resultado (o lanza su error). */
-    private <T> T ejecutar(Callable<T> c) {
+    /** Ejecuta una operación en el hilo de la simulación y devuelve su resultado (o lanza su error). Es la única forma de tocar la simulación. */
+    public <T> T ejecutar(Callable<T> c) {
         try {
             T r = hilo.submit(() -> {
                 T valor = c.call();
@@ -118,6 +118,11 @@ public final class GestorSimulacion implements AutoCloseable {
         } catch (InterruptedException | java.util.concurrent.TimeoutException e) {
             throw new IllegalStateException("La simulación no respondió a tiempo");
         }
+    }
+
+    /** Ejecuta una consulta sobre la simulación en vivo (en su propio hilo). */
+    public <T> T conSimulacion(java.util.function.Function<Simulacion, T> f) {
+        return ejecutar(() -> f.apply(sim));
     }
 
     // ------------------------------------------------------------------ control

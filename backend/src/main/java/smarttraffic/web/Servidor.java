@@ -47,6 +47,8 @@ public final class Servidor implements AutoCloseable {
         public boolean demo = false;
         /** Servicio de OpenStreetMap (API Overpass) del que el servidor descarga el mapa. */
         public String overpassUrl = "https://overpass-api.de/api/interpreter";
+        /** Buscador de lugares (Nominatim). */
+        public String nominatimUrl = "https://nominatim.openstreetmap.org/search";
         public int overpassIntentos = 3;
         public long overpassEsperaMs = 5000;
     }
@@ -113,6 +115,7 @@ public final class Servidor implements AutoCloseable {
     private final GestorSimulacion gestor;
     private final ServicioRed servicioRed;
     private final ImportacionOsm importacionOsm;
+    private final Geocodificador geocodificador;
     private final HttpServer http;
     private final List<Ruta> rutas = new ArrayList<>();
     // 5 fallos por correo; 30 por dirección (varias personas pueden compartir una misma conexión)
@@ -127,6 +130,7 @@ public final class Servidor implements AutoCloseable {
         this.repo = repo;
         this.gestor = gestor;
         this.servicioRed = servicioRed;
+        this.geocodificador = new Geocodificador(opc.nominatimUrl);
         this.importacionOsm = new ImportacionOsm(servicioRed, opc.overpassUrl, opc.overpassIntentos, opc.overpassEsperaMs);
         for (String o : opc.origenCors == null ? new String[0] : opc.origenCors.split(",")) {
             String origen = o.trim();
@@ -215,6 +219,8 @@ public final class Servidor implements AutoCloseable {
         ruta("GET", "/api/historial", TODOS, p -> repo.historial(entero(p.consulta.get("limite"), 20, 1, 200)));
         ruta("GET", "/api/historial/{id}", TODOS, p -> repo.detalleSimulacion(Long.parseLong(p.params.get("id"))).orElseThrow(() -> new NoSuchElementException("No existe esa simulación")));
         ruta("POST", "/api/comparar", TODOS, this::comparar);
+        ruta("GET", "/api/lugares", TODOS, this::lugares);
+        ruta("POST", "/api/ruta", TODOS, this::ruta);
         // ---- operación (administrador y operador)
         ruta("POST", "/api/sim/control", OPERACION, p -> {
             String accion = texto(p.cuerpo(), "accion");
@@ -371,6 +377,69 @@ public final class Servidor implements AutoCloseable {
         List<Object> ranking = new ArrayList<>();
         for (PuntosCriticos.Critico c : r.ranking()) ranking.add(Json.obj("id", c.interseccionId(), "nombre", c.nombre(), "lat", c.lat(), "lon", c.lon(), "accidentes", c.accidentes(), "puntaje", c.puntaje()));
         return Json.obj("total", accidentes.size(), "asignados", r.asignados(), "fueraDeRed", r.fueraDeRed(), "ranking", ranking, "calor", r.calor());
+    }
+
+    private Object lugares(Peticion p) {
+        String q = p.consulta.getOrDefault("q", "").trim();
+        if (q.length() < 2) throw new IllegalArgumentException("Escribe al menos 2 letras para buscar.");
+        if (q.length() > 120) throw new IllegalArgumentException("La búsqueda es demasiado larga.");
+        List<Map<String, Object>> locales = servicioRed.buscarLocal(q, 8), externos = new ArrayList<>();
+        String aviso = null;
+        if ("1".equals(p.consulta.get("externo"))) {
+            var proy = servicioRed.proyeccion();
+            if (proy == null) {
+                aviso = "La red actual es de demostración y no tiene ubicación real: solo se buscan calles de la red.";
+            } else {
+                try {
+                    externos = geocodificador.buscar(q, proy, servicioRed.caja());
+                    if (externos.isEmpty()) aviso = "OpenStreetMap no encontró ese lugar dentro de la zona del mapa cargado.";
+                } catch (java.io.IOException e) {
+                    aviso = e.getMessage();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    aviso = "La búsqueda se interrumpió.";
+                }
+            }
+        }
+        Map<String, Object> r = Json.obj("locales", locales, "externos", externos);
+        if (aviso != null) r.put("aviso", aviso);
+        return r;
+    }
+
+    private smarttraffic.sim.PlanificadorRutas.Punto punto(Map<String, Object> m, String nombre) {
+        Object o = m.get(nombre);
+        if (!(o instanceof Map<?, ?> d)) throw new IllegalArgumentException("Falta el " + nombre + " de la ruta.");
+        @SuppressWarnings("unchecked") Map<String, Object> pt = (Map<String, Object>) d;
+        if (pt.get("x") instanceof Number x && pt.get("y") instanceof Number y) return new smarttraffic.sim.PlanificadorRutas.Punto(x.doubleValue(), y.doubleValue());
+        if (pt.get("lat") instanceof Number la && pt.get("lon") instanceof Number lo) {
+            var proy = servicioRed.proyeccion();
+            if (proy == null) throw new IllegalArgumentException("La red actual no tiene ubicación real: indica el punto con x e y.");
+            return new smarttraffic.sim.PlanificadorRutas.Punto(proy.x(lo.doubleValue()), proy.y(la.doubleValue()));
+        }
+        if (pt.get("nodo") instanceof String id) {
+            var n = servicioRed.copia().red().interseccion(id);
+            if (n == null) throw new IllegalArgumentException("No existe la intersección " + id);
+            return new smarttraffic.sim.PlanificadorRutas.Punto(n.x(), n.y());
+        }
+        throw new IllegalArgumentException("El " + nombre + " necesita x e y, lat y lon, o el identificador de una intersección.");
+    }
+
+    private Object ruta(Peticion p) {
+        var origen = punto(p.cuerpo(), "origen");
+        var destino = punto(p.cuerpo(), "destino");
+        int alternativas = (int) numero(p.cuerpo(), "alternativas", 0, 3, 2.0);
+        var opciones = gestor.conSimulacion(sim -> new Object[] {smarttraffic.sim.PlanificadorRutas.planificar(sim, origen, destino, alternativas), sim.config().modoSemaforos.name(), sim.tiempo()});
+        @SuppressWarnings("unchecked") List<smarttraffic.sim.PlanificadorRutas.Opcion> lista = (List<smarttraffic.sim.PlanificadorRutas.Opcion>) opciones[0];
+        List<Object> salida = new ArrayList<>();
+        for (var o : lista) {
+            double[] g = new double[o.geometria().length];
+            for (int i = 0; i < g.length; i++) g[i] = Math.round(o.geometria()[i] * 10) / 10.0;
+            List<Object> pasos = new ArrayList<>();
+            for (var s : o.pasos()) pasos.add(Json.obj("giro", s.giro(), "texto", s.texto(), "calle", s.calle(), "distancia", Math.round(s.distancia()), "tiempo", Math.round(s.tiempo()), "x", Math.round(s.x() * 10) / 10.0, "y", Math.round(s.y() * 10) / 10.0));
+            salida.add(Json.obj("etiqueta", o.etiqueta(), "distancia", Math.round(o.distancia()), "tiempoLibre", Math.round(o.tiempoLibre()), "tiempoActual", Math.round(o.tiempoActual()),
+                    "retraso", Math.max(0, Math.round(o.tiempoActual() - o.tiempoLibre())), "geometria", g, "pasos", pasos, "vias", o.vias()));
+        }
+        return Json.obj("opciones", salida, "modoSemaforos", opciones[1], "tiempoSimulado", opciones[2], "aviso", "Los tiempos son estimaciones del modelo de tráfico, no mediciones reales.");
     }
 
     private Object comparar(Peticion p) {

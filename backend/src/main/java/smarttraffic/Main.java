@@ -60,6 +60,7 @@ public final class Main {
         opc.dirEstatico = env("SMARTTRAFFIC_STATIC", "../frontend/dist");
         opc.origenCors = System.getenv("SMARTTRAFFIC_CORS");
         opc.demo = "1".equals(System.getenv("SMARTTRAFFIC_DEMO"));
+        if (System.getenv("SMARTTRAFFIC_NOMINATIM") != null) opc.nominatimUrl = System.getenv("SMARTTRAFFIC_NOMINATIM");
         if (System.getenv("SMARTTRAFFIC_OVERPASS") != null) opc.overpassUrl = System.getenv("SMARTTRAFFIC_OVERPASS");
         String secreto = System.getenv("SMARTTRAFFIC_JWT_SECRET");
         if (secreto != null && secreto.length() >= 32) opc.secretoJwt = secreto;
