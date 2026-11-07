@@ -46,13 +46,22 @@ public class RedVial {
     public void moverInterseccion(String id, double x, double y) {
         Interseccion i = grafo.vertice(id);
         i.mover(x, y);
-        for (Grafo.Arista<Via> a : grafo.salientes(id)) recalcular(a.dato());
-        for (Grafo.Arista<Via> a : grafo.entrantes(id)) recalcular(a.dato());
+        for (Grafo.Arista<Via> a : grafo.salientes(id)) { ajustarExtremo(a.dato(), true, x, y); recalcular(a.dato()); }
+        for (Grafo.Arista<Via> a : grafo.entrantes(id)) { ajustarExtremo(a.dato(), false, x, y); recalcular(a.dato()); }
+    }
+
+    /** Al mover una intersección, el extremo de la poligonal de sus vías la sigue. */
+    private void ajustarExtremo(Via v, boolean inicio, double x, double y) {
+        double[] p = v.puntos().clone();
+        int k = inicio ? 0 : p.length - 2;
+        p[k] = x;
+        p[k + 1] = y;
+        v.setPuntos(p);
     }
 
     private void recalcular(Via v) {
         if (v.longitudManual()) return;
-        double d = grafo.vertice(v.desde()).distanciaA(grafo.vertice(v.hacia()));
+        double d = v.longitudGeometria();
         if (d > 0) v.setLongitud(d, false);
     }
 
@@ -71,10 +80,24 @@ public class RedVial {
     public Via agregarVia(String id, String desde, String hacia, String nombre, Double longitud, double velocidadKmh) {
         if (!grafo.contieneVertice(desde)) throw new IllegalArgumentException("No existe la intersección " + desde);
         if (!grafo.contieneVertice(hacia)) throw new IllegalArgumentException("No existe la intersección " + hacia);
-        double largo = longitud != null ? longitud : grafo.vertice(desde).distanciaA(grafo.vertice(hacia));
-        Via via = new Via(id, desde, hacia, nombre, largo, velocidadKmh, longitud != null);
+        Interseccion a = grafo.vertice(desde), b = grafo.vertice(hacia);
+        return agregarVia(id, desde, hacia, nombre, longitud, velocidadKmh, new double[] {a.x(), a.y(), b.x(), b.y()});
+    }
+
+    /** Agrega una vía con su geometría (poligonal en metros, del inicio al final). */
+    public Via agregarVia(String id, String desde, String hacia, String nombre, Double longitud, double velocidadKmh, double[] puntos) {
+        if (!grafo.contieneVertice(desde)) throw new IllegalArgumentException("No existe la intersección " + desde);
+        if (!grafo.contieneVertice(hacia)) throw new IllegalArgumentException("No existe la intersección " + hacia);
+        double largo = longitud != null ? longitud : geometriaLarga(puntos);
+        Via via = new Via(id, desde, hacia, nombre, largo, velocidadKmh, longitud != null, puntos);
         grafo.agregarArista(id, desde, hacia, via);
         return via;
+    }
+
+    private static double geometriaLarga(double[] p) {
+        double total = 0;
+        for (int i = 2; i + 1 < p.length; i += 2) total += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]);
+        return total;
     }
 
     /** Agrega una calle; si es de doble sentido crea dos vías (id + ":AB" e id + ":BA"). */
@@ -112,8 +135,11 @@ public class RedVial {
         return porTipo(TipoNodo.ENTRADA_SALIDA);
     }
 
+    /** Intersecciones desde las que salen vehículos de emergencia (tienen algún servicio). */
     public List<Interseccion> bases() {
-        return porTipo(TipoNodo.BASE_EMERGENCIAS);
+        List<Interseccion> lista = new ArrayList<>();
+        for (Interseccion i : intersecciones()) if (!i.servicios().isEmpty()) lista.add(i);
+        return lista;
     }
 
     private List<Interseccion> porTipo(TipoNodo tipo) {

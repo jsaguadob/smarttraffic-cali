@@ -25,8 +25,15 @@ public final class RedCali {
                 red.agregarInterseccion(new Interseccion(id(r, c), CALLES[r] + " con " + CARRERAS[c], XS[c] + DX[r][c], YS[r] + DY[r][c], tipo));
             }
         }
-        red.agregarInterseccion(new Interseccion("HOSP", "Hospital Universitario (ficticio)", -190, 210, TipoNodo.BASE_EMERGENCIAS));
-        red.agregarInterseccion(new Interseccion("EST", "Estación de Bomberos y Policía (ficticia)", 960, 415, TipoNodo.BASE_EMERGENCIAS));
+        Interseccion hospital = new Interseccion("HOSP", "Hospital Universitario (ficticio)", -190, 210, TipoNodo.BASE_EMERGENCIAS);
+        hospital.servicios().add("hospital");
+        hospital.setSemaforizada(false);
+        Interseccion estacion = new Interseccion("EST", "Estación de Bomberos y Policía (ficticia)", 960, 415, TipoNodo.BASE_EMERGENCIAS);
+        estacion.servicios().add("bomberos");
+        estacion.servicios().add("policia");
+        estacion.setSemaforizada(false);
+        red.agregarInterseccion(hospital);
+        red.agregarInterseccion(estacion);
 
         // Calles horizontales (una por fila). Calle 13: solo hacia el este. Calle 9: solo hacia el oeste.
         double[] velCalle = {50, 40, 40, 50};
