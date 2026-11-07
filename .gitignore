@@ -1,0 +1,7 @@
+backend/out/
+backend/data/
+frontend/node_modules/
+frontend/dist/
+docs/build/
+*.class
+.DS_Store
