@@ -1,0 +1,6 @@
+red: 784 intersecciones, 3024 v?as
+veh?culos activos tras 240 s simulados: 599
+un paso de simulaci?n: 2.646 ms (a 10 pasos por segundo real usa 2.6 % de un n?cleo)
+velocidad m?xima sostenible: 378 pasos por segundo real = 38x
+planificar ruta con 2 alternativas entre dos puntos al azar (100 casos): media 8.6 ms, m?ximo 40.1 ms
+nodos expandidos en 50 consultas: Dijkstra 20440, A* 5340 (A* explora 26 % de lo de Dijkstra, mismo costo)
