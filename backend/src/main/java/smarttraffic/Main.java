@@ -3,6 +3,7 @@ package smarttraffic;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+import smarttraffic.datos.ConexionBd;
 import smarttraffic.datos.ProyeccionLocal;
 import smarttraffic.datos.RedVialJson;
 import smarttraffic.datos.Repositorio;
@@ -28,7 +29,12 @@ public final class Main {
     }
 
     public static void main(String[] args) throws Exception {
-        Repositorio repo = new Repositorio(env("SMARTTRAFFIC_DB_URL", "jdbc:h2:file:./data/smarttraffic;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"), env("SMARTTRAFFIC_DB_USER", "sa"), env("SMARTTRAFFIC_DB_PASSWORD", ""));
+        // La dirección puede ser de JDBC o la «línea» que entrega Neon, Render o Railway (postgresql://usuario:clave@host/base).
+        String direccion = env("SMARTTRAFFIC_DB_URL", env("DATABASE_URL", "jdbc:h2:file:./data/smarttraffic;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"));
+        ConexionBd.Datos bd = ConexionBd.interpretar(direccion, System.getenv("SMARTTRAFFIC_DB_USER"), System.getenv("SMARTTRAFFIC_DB_PASSWORD"));
+        boolean h2 = bd.jdbcUrl().startsWith("jdbc:h2:");
+        System.out.println("Conectando a la base de datos: " + bd.descripcion()); // sin usuario ni contraseña
+        Repositorio repo = new Repositorio(bd.jdbcUrl(), bd.usuario() == null && h2 ? "sa" : bd.usuario(), bd.clave() == null && h2 ? "" : bd.clave());
         crearUsuariosIniciales(repo);
 
         Optional<RedVialJson.Cargada> activa = repo.cargarRedActiva();

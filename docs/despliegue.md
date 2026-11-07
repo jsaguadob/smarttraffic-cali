@@ -39,7 +39,8 @@ con las variables de abajo para un servidor real.
 | Variable | Qué hace |
 |---|---|
 | `PORT` o `SMARTTRAFFIC_PORT` | Puerto (por defecto 8080). Muchos servicios en la nube definen `PORT` solos. |
-| `SMARTTRAFFIC_DB_URL`, `_DB_USER`, `_DB_PASSWORD` | Base de datos. Por defecto un archivo H2 local (solo desarrollo). En producción, PostgreSQL: `jdbc:postgresql://servidor:5432/smarttraffic`. |
+| `SMARTTRAFFIC_DB_URL` (o `DATABASE_URL`) | Base de datos. Acepta la **línea que entrega Neon, Render o Railway tal cual** (`postgresql://usuario:clave@host/base?sslmode=require`) o el formato JDBC (`jdbc:postgresql://host:5432/base`). Por defecto, un archivo H2 local (solo desarrollo). |
+| `SMARTTRAFFIC_DB_USER`, `SMARTTRAFFIC_DB_PASSWORD` | Opcionales si ya vienen dentro de la línea. Si los defines, tienen prioridad. |
 | `SMARTTRAFFIC_JWT_SECRET` | Clave de las sesiones (mín. 32 caracteres). Sin ella se genera una al azar en cada arranque. |
 | `SMARTTRAFFIC_ADMIN_CORREO`, `SMARTTRAFFIC_ADMIN_CLAVE` | Primer administrador. Si no pones la clave se genera una y se imprime **una sola vez** en el registro. |
 | `SMARTTRAFFIC_CORS` | Pantallas autorizadas, separadas por coma. Admite `*` dentro de la dirección (p. ej. `https://*--sitio.netlify.app` para las ramas). Un `*` solo se ignora a propósito. |
@@ -48,6 +49,21 @@ con las variables de abajo para un servidor real.
 
 Usa HTTPS delante del servidor (el navegador bloquea llamadas HTTP desde una página HTTPS). Los servicios en la nube
 lo dan de forma automática.
+
+### Base de datos en Neon
+
+1. En la consola de Neon abre tu proyecto → **Connect** (o *Connection details*) y copia la línea de conexión.
+2. Pégala **solo** en el panel de variables del servicio donde corre el servidor, como `SMARTTRAFFIC_DB_URL`
+   (o `DATABASE_URL`). No la pegues en el repositorio, en un chat ni en un documento: lleva la contraseña.
+3. Prefiere la dirección **directa** (sin `-pooler` en el nombre del servidor): este servidor mantiene sus propias
+   conexiones y la directa evita sorpresas con el balanceador de Neon.
+4. Al arrancar, el servidor crea las tablas solo y el primer administrador con `SMARTTRAFFIC_ADMIN_CORREO` y
+   `SMARTTRAFFIC_ADMIN_CLAVE`. El registro imprime a qué servidor se conecta, nunca el usuario ni la contraseña.
+5. **Ramas de Neon:** crea una rama de base de datos `desarrollo` (copia barata de la de producción) y usa su propia
+   línea para el servidor de `desarrollo`. Así las pruebas nunca tocan los datos de `main`.
+6. En el plan gratuito, Neon suspende la base tras unos minutos sin uso: la primera petición después de una pausa
+   puede tardar unos segundos.
+7. Si la línea se llegó a pegar donde no debía, cambia la contraseña del rol en Neon (*Roles → Reset password*).
 
 ### El mapa real de Cali
 
