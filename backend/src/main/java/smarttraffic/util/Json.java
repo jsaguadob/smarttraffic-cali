@@ -33,7 +33,8 @@ public final class Json {
             double d = n.doubleValue();
             if (Double.isNaN(d) || Double.isInfinite(d)) sb.append("null");
             else if (d == Math.rint(d) && Math.abs(d) < 1e15) sb.append((long) d);
-            else sb.append(Math.round(d * 1000.0) / 1000.0);
+            else if (Math.abs(d) < 1e9) sb.append(java.math.BigDecimal.valueOf(Math.round(d * 1e7) / 1e7).toPlainString()); // 7 decimales: ~1 cm en coordenadas
+            else sb.append(d);
         } else if (v instanceof Map<?, ?> m) {
             sb.append('{');
             boolean primero = true;
