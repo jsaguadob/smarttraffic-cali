@@ -11,7 +11,6 @@ COPY --from=compilar /app/backend/out/main /app/clases
 COPY --from=compilar /app/backend/lib/h2.jar /app/backend/lib/postgresql.jar /app/lib/
 USER smarttraffic
 WORKDIR /datos
-ENV SMARTTRAFFIC_PORT=8080
+# El puerto lo define la plataforma con la variable PORT (si no existe, 8080).
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s CMD ["java", "-version"]
 CMD ["java", "-cp", "/app/clases:/app/lib/h2.jar:/app/lib/postgresql.jar", "smarttraffic.Main"]
