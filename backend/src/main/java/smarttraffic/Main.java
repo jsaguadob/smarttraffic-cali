@@ -50,7 +50,7 @@ public final class Main {
         }
 
         Servidor.Opciones opc = new Servidor.Opciones();
-        opc.puerto = Integer.parseInt(env("SMARTTRAFFIC_PORT", "8080"));
+        opc.puerto = Integer.parseInt(env("SMARTTRAFFIC_PORT", env("PORT", "8080")));
         opc.dirEstatico = env("SMARTTRAFFIC_STATIC", "../frontend/dist");
         opc.origenCors = System.getenv("SMARTTRAFFIC_CORS");
         opc.demo = "1".equals(System.getenv("SMARTTRAFFIC_DEMO"));

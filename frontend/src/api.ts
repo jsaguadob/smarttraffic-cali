@@ -1,6 +1,8 @@
 import type { Usuario } from './tipos';
 
 const CLAVE_TOKEN = 'smarttraffic_token';
+/** Dirección del servidor Java. Vacía = el mismo sitio (lo normal cuando el servidor entrega la pantalla). En Netlify se define con VITE_API_URL. */
+export const BASE: string = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
 let alExpirar: (() => void) | null = null;
 
 export class ErrorApi extends Error {
@@ -27,7 +29,7 @@ export async function api<T>(metodo: string, ruta: string, cuerpo?: unknown): Pr
   if (cuerpo !== undefined) cab['Content-Type'] = 'application/json';
   let r: Response;
   try {
-    r = await fetch(ruta, { method: metodo, headers: cab, body: cuerpo === undefined ? undefined : typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo) });
+    r = await fetch(BASE + ruta, { method: metodo, headers: cab, body: cuerpo === undefined ? undefined : typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo) });
   } catch {
     throw new ErrorApi(0, 'No se pudo conectar con el servidor. Revisa que esté en marcha.');
   }

@@ -115,12 +115,21 @@ public final class Servidor implements AutoCloseable {
     private final Seguridad.LimitadorIntentos limitadorIp = new Seguridad.LimitadorIntentos(30);
     private final Semaphore comparaciones = new Semaphore(2);
     private final String claveFalsa = Seguridad.hashClave("clave-falsa-para-igualar-tiempos");
+    private final List<Pattern> origenesPermitidos = new ArrayList<>();
 
     public Servidor(Opciones opc, Repositorio repo, GestorSimulacion gestor, ServicioRed servicioRed) throws IOException {
         this.opc = opc;
         this.repo = repo;
         this.gestor = gestor;
         this.servicioRed = servicioRed;
+        for (String o : opc.origenCors == null ? new String[0] : opc.origenCors.split(",")) {
+            String origen = o.trim();
+            if (origen.isEmpty() || origen.equals("*")) continue; // un comodín total anularía la protección: no se admite
+            StringBuilder rx = new StringBuilder("^");
+            String[] partes = origen.split("\\*", -1);
+            for (int i = 0; i < partes.length; i++) rx.append(i > 0 ? "[A-Za-z0-9.-]*" : "").append(Pattern.quote(partes[i]));
+            origenesPermitidos.add(Pattern.compile(rx.append("$").toString()));
+        }
         this.http = HttpServer.create(new InetSocketAddress(opc.puerto), 0);
         registrarRutas();
         http.createContext("/", this::atender);
@@ -384,10 +393,13 @@ public final class Servidor implements AutoCloseable {
             h.set("X-Content-Type-Options", "nosniff");
             h.set("Referrer-Policy", "no-referrer");
             h.set("X-Frame-Options", "DENY");
-            if (opc.origenCors != null) {
-                h.set("Access-Control-Allow-Origin", opc.origenCors);
+            String origenPeticion = ex.getRequestHeaders().getFirst("Origin");
+            if (origenPeticion != null && origenPermitido(origenPeticion)) {
+                h.set("Access-Control-Allow-Origin", origenPeticion);
+                h.add("Vary", "Origin");
                 h.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
                 h.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+                h.set("Access-Control-Max-Age", "600");
             }
             String metodo = ex.getRequestMethod().toUpperCase();
             if (metodo.equals("OPTIONS")) { ex.sendResponseHeaders(204, -1); return; }
@@ -437,6 +449,11 @@ public final class Servidor implements AutoCloseable {
         } finally {
             ex.close();
         }
+    }
+
+    private boolean origenPermitido(String origen) {
+        for (Pattern p : origenesPermitidos) if (p.matcher(origen).matches()) return true;
+        return false;
     }
 
     private Usuario autenticar(String cabecera) {

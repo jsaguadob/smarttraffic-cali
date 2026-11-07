@@ -23,7 +23,7 @@ export function GraficaLineas({ series, titulo, unidad, ancho = 520, alto = 220 
           <g key={f}>
             <line x1={m.i} x2={ancho - m.d} y1={sy(yMax * f)} y2={sy(yMax * f)} className="rejilla" />
             <text x={m.i - 6} y={sy(yMax * f) + 4} textAnchor="end" className="eje">{(yMax * f).toFixed(yMax > 20 ? 0 : 1)}</text>
-            <text x={sx(xMax * f)} y={alto - 8} textAnchor="middle" className="eje">{Math.round((xMax * f) / 60)} min</text>
+            <text x={sx(xMax * f)} y={alto - 8} textAnchor={f === 1 ? 'end' : f === 0 ? 'start' : 'middle'} className="eje">{Math.round((xMax * f) / 60)} min</text>
           </g>
         ))}
         {series.map((s) => (

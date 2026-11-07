@@ -1,0 +1,29 @@
+# Netlify aloja SOLO la pantalla (archivos estáticos).
+# El servidor Java (simulación en vivo, base de datos) debe estar en otro lugar: ver docs/despliegue.md.
+#
+# Ramas:  main       → producción
+#         desarrollo → despliegue de la rama (https://desarrollo--NOMBRE-DEL-SITIO.netlify.app)
+# En cada una, define VITE_API_URL (Site configuration → Environment variables, con alcance por contexto)
+# con la dirección HTTPS del servidor correspondiente.
+
+[build]
+  base = "frontend"
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "geolocation=(), camera=(), microphone=()"
+    Content-Security-Policy = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; frame-ancestors 'none'"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

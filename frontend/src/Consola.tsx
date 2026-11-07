@@ -205,7 +205,7 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
           <label>Velocidad</label>
           <div className="segmentos" role="group" aria-label="Velocidad de la simulación">
             {[1, 2, 4, 8, 16].map((v) => (
-              <button key={v} aria-pressed={inst.velocidad === v} disabled={!puedeOperar} onClick={() => void control(inst.corriendo ? 'iniciar' : 'pausar', { velocidad: v })}>{v}x</button>
+              <button key={v} aria-pressed={inst.velocidad === v} disabled={!puedeOperar} onClick={() => void config({ velocidad: v })}>{v}x</button>
             ))}
           </div>
         </div>

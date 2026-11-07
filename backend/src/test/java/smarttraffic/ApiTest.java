@@ -56,7 +56,11 @@ class ApiTest {
     @BeforeAll
     static void iniciar() throws Exception {
         System.setProperty("smarttraffic.pbkdf2", "1000");
-        repo = new Repositorio("jdbc:h2:mem:api" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE", "sa", "");
+        // Por defecto H2 en memoria. Con SMARTTRAFFIC_TEST_DB_URL (+ _USER y _PASSWORD) se prueba contra PostgreSQL real.
+        String urlPg = System.getenv("SMARTTRAFFIC_TEST_DB_URL");
+        repo = urlPg != null
+                ? new Repositorio(urlPg, System.getenv("SMARTTRAFFIC_TEST_DB_USER"), System.getenv("SMARTTRAFFIC_TEST_DB_PASSWORD"))
+                : new Repositorio("jdbc:h2:mem:api" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE", "sa", "");
         repo.crearUsuario("Admin", "admin@t.test", Seguridad.hashClave(CLAVE), "ADMINISTRADOR");
         repo.crearUsuario("Operador", "operador@t.test", Seguridad.hashClave(CLAVE), "OPERADOR");
         repo.crearUsuario("Analista", "analista@t.test", Seguridad.hashClave(CLAVE), "ANALISTA");

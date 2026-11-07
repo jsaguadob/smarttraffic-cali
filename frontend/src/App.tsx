@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { api, sesion } from './api';
+import { api, BASE, sesion } from './api';
 import { construirGeo } from './geometria';
 import type { FuenteInstantanea } from './MapaTrafico';
 import { Login, Marca } from './Login';
@@ -55,7 +55,7 @@ export function App(): ReactElement {
     if (!usuario) return;
     void cargarRed();
     api<Instantanea>('GET', '/api/sim/estado').then((d) => { fuente.current = { inst: d, recibido: performance.now() }; setInst(d); }).catch(() => undefined);
-    const es = new EventSource('/api/sim/stream?token=' + encodeURIComponent(sesion.token() ?? ''));
+    const es = new EventSource(BASE + '/api/sim/stream?token=' + encodeURIComponent(sesion.token() ?? ''));
     let ultimo = 0;
     es.onopen = () => setConectado(true);
     es.onerror = () => setConectado(false);

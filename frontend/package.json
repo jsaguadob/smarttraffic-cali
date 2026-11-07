@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "build": "node scripts/verificar-entorno.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "verificar-entorno": "node scripts/verificar-entorno.mjs"
   },
   "dependencies": {
     "react": "18.3.1",

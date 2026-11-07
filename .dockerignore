@@ -1,0 +1,6 @@
+.git
+frontend
+docs
+backend/out
+backend/data
+**/node_modules

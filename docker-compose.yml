@@ -1,0 +1,25 @@
+# Servidor + PostgreSQL. Uso:  SMARTTRAFFIC_JWT_SECRET=$(openssl rand -base64 48) SMARTTRAFFIC_ADMIN_CLAVE='UnaClaveLarga2026' docker compose up --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: smarttraffic
+      POSTGRES_USER: smarttraffic
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cambia-esta-clave-2026}
+    volumes:
+      - datos:/var/lib/postgresql/data
+  api:
+    build: .
+    depends_on: [db]
+    ports: ["8080:8080"]
+    environment:
+      SMARTTRAFFIC_DB_URL: jdbc:postgresql://db:5432/smarttraffic
+      SMARTTRAFFIC_DB_USER: smarttraffic
+      SMARTTRAFFIC_DB_PASSWORD: ${POSTGRES_PASSWORD:-cambia-esta-clave-2026}
+      SMARTTRAFFIC_JWT_SECRET: ${SMARTTRAFFIC_JWT_SECRET:?define SMARTTRAFFIC_JWT_SECRET (mínimo 32 caracteres)}
+      SMARTTRAFFIC_ADMIN_CORREO: ${SMARTTRAFFIC_ADMIN_CORREO:-admin@smarttraffic.local}
+      SMARTTRAFFIC_ADMIN_CLAVE: ${SMARTTRAFFIC_ADMIN_CLAVE:?define SMARTTRAFFIC_ADMIN_CLAVE (mínimo 10 caracteres, con letras y números)}
+      # Direcciones de las pantallas autorizadas a usar la API (separadas por coma; admite * dentro de la dirección)
+      SMARTTRAFFIC_CORS: ${SMARTTRAFFIC_CORS:-}
+volumes:
+  datos:
