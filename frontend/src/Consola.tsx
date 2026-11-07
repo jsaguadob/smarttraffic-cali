@@ -5,6 +5,7 @@ import { puntoEnVia } from './geometria';
 import type { RedGeo } from './geometria';
 import { ImportarMapa } from './ImportarMapa';
 import { MapaTrafico } from './MapaTrafico';
+import { PanelRuta, useNavegacion } from './Navegacion';
 import type { CapasMapa, FuenteInstantanea, Hover, ManejadorMapa, PuntoMapa } from './MapaTrafico';
 import type { Criticos, Instantanea, Usuario } from './tipos';
 
@@ -64,7 +65,8 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
   const [capas, setCapas] = useState<CapasMapa>({ base: true, vehiculos: true, congestion: true, semaforos: true, rutas: true, calor: false });
   const [marcados, setMarcados] = useState<string[]>([]);
   const [hover, setHover] = useState<Hover | null>(null);
-  const [pestana, setPestana] = useState<'resumen' | 'incidentes' | 'eventos'>('resumen');
+  const [pestana, setPestana] = useState<'ruta' | 'resumen' | 'incidentes' | 'eventos'>('ruta');
+  const nav = useNavegacion(geo, inst);
   const [mensaje, setMensaje] = useState<{ texto: string; tipo: 'ok' | 'error' } | null>(null);
   const [criticos, setCriticos] = useState<Criticos | null>(null);
   const [enfocar, setEnfocar] = useState<{ x: number; y: number; k?: number; n: number } | null>(null);
@@ -177,7 +179,7 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
   const selVia = sel?.tipo === 'via' ? geo.vias[geo.indiceVia.get(sel.id) ?? -1] : undefined;
   const selNodo = sel?.tipo === 'nodo' ? geo.nodos[geo.indiceNodo.get(sel.id) ?? -1] : undefined;
   const k = inst.kpi;
-  const cursor = herramienta === 'ver' ? 'grab' : 'crosshair';
+  const cursor = herramienta === 'ver' && !nav.eligiendo ? 'grab' : 'crosshair';
   const vpm = vpmLocal ?? inst.vpm;
 
   const tooltip = (() => {
@@ -264,7 +266,7 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
 
       <div className="mapa-contenedor">
         <MapaTrafico
-          ref={mapa} geo={geo} origen={geo.red.origen} fuente={fuente} capas={capas} calor={criticos?.calor} criticos={puntosCriticos} seleccion={seleccion} marcados={marcados} cursor={cursor} enfocar={enfocar}
+          ref={mapa} geo={geo} origen={geo.red.origen} fuente={fuente} capas={capas} ruta={nav.rutaMapa} modoElegir={nav.eligiendo !== null} onClickMapa={nav.alClickMapa} calor={criticos?.calor} criticos={puntosCriticos} seleccion={seleccion} marcados={marcados} cursor={cursor} enfocar={enfocar}
           onClickVia={alClickVia} onClickNodo={alClickNodo} onClickVacio={() => { if (herramienta === 'ver') setSeleccion(null); }} onHover={setHover}
         />
         {!conectado && <div className="desconectado" role="alert">Reconectando con el servidor…</div>}
@@ -297,8 +299,14 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
           <label><input type="checkbox" checked={capas.rutas} onChange={(e) => setCapas({ ...capas, rutas: e.target.checked })} /> Rutas de emergencia</label>
           {criticos && criticos.total > 0 && <label><input type="checkbox" checked={capas.calor} onChange={(e) => setCapas({ ...capas, calor: e.target.checked })} /> Accidentalidad histórica</label>}
         </div>
+        {nav.banner && (
+          <div className="guia" role="status" aria-live="polite" data-testid="guia">
+            <div className="flecha" aria-hidden="true">{nav.banner.flecha}</div>
+            <div><b>{nav.banner.titulo}</b><span>{nav.banner.detalle}</span></div>
+          </div>
+        )}
         <div className="pista" role="status">
-          {mensaje ? <b style={{ color: mensaje.tipo === 'error' ? '#d93025' : '#188038' }}>{mensaje.texto}</b> : <>{pista[herramienta]}</>}
+          {nav.eligiendo ? <b>Haz clic en el mapa para elegir {nav.eligiendo === 'origen' ? 'el origen' : 'el destino'}.</b> : mensaje ? <b style={{ color: mensaje.tipo === 'error' ? '#d93025' : '#188038' }}>{mensaje.texto}</b> : <>{pista[herramienta]}</>}
           {herramienta === 'onda' && marcados.length >= 2 && puedeOperar && (
             <> <button className="boton chico primario" style={{ pointerEvents: 'auto', marginLeft: 8 }} onClick={() => { void llamar('POST', '/api/sim/semaforos/sincronizar', { nodos: marcados }, 'Onda verde aplicada'); setMarcados([]); }}>Aplicar onda verde ({marcados.length})</button></>
           )}
@@ -307,13 +315,14 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
 
       <aside className="lateral" aria-label="Paneles">
         <div className="tabs" role="tablist">
-          {(['resumen', 'incidentes', 'eventos'] as const).map((p) => (
+          {(['ruta', 'resumen', 'incidentes', 'eventos'] as const).map((p) => (
             <button key={p} role="tab" aria-selected={pestana === p} onClick={() => setPestana(p)}>
-              {p === 'resumen' ? 'Resumen' : p === 'incidentes' ? `Incidentes${inst.i.length ? ` (${inst.i.length})` : ''}` : 'Eventos'}
+              {p === 'ruta' ? 'Cómo llegar' : p === 'resumen' ? 'Resumen' : p === 'incidentes' ? `Incidentes${inst.i.length ? ` (${inst.i.length})` : ''}` : 'Eventos'}
             </button>
           ))}
         </div>
         <div className="cuerpo">
+          {pestana === 'ruta' && <PanelRuta nav={nav} esReal={coordenadasReales} />}
           {pestana === 'resumen' && (
             <>
               {(selVia || selNodo) && (

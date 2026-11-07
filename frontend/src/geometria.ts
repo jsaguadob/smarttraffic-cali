@@ -136,3 +136,24 @@ export function luzDeFase(fase: number, grupo: number): 'verde' | 'amarillo' | '
   if (fase === 4 && grupo === 1) return 'amarillo';
   return 'rojo';
 }
+
+/** Longitud de una polilínea (x0, y0, x1, y1...). */
+export function largoPolilinea(p: number[]): number {
+  let t = 0;
+  for (let i = 2; i < p.length; i += 2) t += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]);
+  return t;
+}
+
+/** Punto de una polilínea a {@code d} metros de su inicio, con el ángulo de marcha. */
+export function puntoEnPolilinea(p: number[], d: number): { x: number; y: number; ang: number } {
+  let resto = Math.max(0, d);
+  for (let i = 2; i < p.length; i += 2) {
+    const dx = p[i] - p[i - 2], dy = p[i + 1] - p[i - 1], seg = Math.hypot(dx, dy);
+    if (resto <= seg || i === p.length - 2) {
+      const f = seg === 0 ? 0 : Math.min(1, resto / seg);
+      return { x: p[i - 2] + dx * f, y: p[i - 1] + dy * f, ang: Math.atan2(dy, dx) };
+    }
+    resto -= seg;
+  }
+  return { x: p[0] ?? 0, y: p[1] ?? 0, ang: 0 };
+}

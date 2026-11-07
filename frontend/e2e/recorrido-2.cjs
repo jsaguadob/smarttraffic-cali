@@ -88,7 +88,7 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   await clic('Salir'); await esperar(hayTexto('Ingresa con tu cuenta'));
   await p.setViewport({ width: 390, height: 844 });
   await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Operador de movilidad')).click());
-  await esperar(hayTexto('Estado de la red'), 12000); await dormir(1200);
+  await esperar(hayTexto('Cómo llegar'), 12000); await dormir(1200);
   ok(!(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), 'en el celular no hay desborde lateral'); const cv = await lienzo(); ok(cv.height > 300, 'y el mapa tiene un tamaño útil', JSON.stringify(cv)); await foto('12-celular');
   const util = errores.filter((e) => !/favicon|status of 40[0-9]/.test(e)); ok(util.length === 0, 'sin errores de consola ni de página', util.join(' | ').slice(0, 400));
   await b.close();

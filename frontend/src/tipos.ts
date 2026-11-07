@@ -177,3 +177,47 @@ export interface ResultadoEdicion {
   problemas: string[];
   id: string | null;
 }
+
+export interface Lugar {
+  tipo: 'calle' | 'interseccion' | 'servicio' | 'lugar' | 'mapa' | 'ubicacion';
+  nombre: string;
+  detalle?: string;
+  x: number;
+  y: number;
+  lat?: number;
+  lon?: number;
+}
+
+export interface PasoRuta {
+  giro: string;
+  texto: string;
+  calle: string;
+  distancia: number;
+  tiempo: number;
+  x: number;
+  y: number;
+}
+
+export interface OpcionRuta {
+  etiqueta: string;
+  distancia: number;
+  tiempoLibre: number;
+  tiempoActual: number;
+  retraso: number;
+  geometria: number[];
+  pasos: PasoRuta[];
+  vias: string[];
+}
+
+export interface RespuestaRuta {
+  opciones: OpcionRuta[];
+  modoSemaforos: string;
+  tiempoSimulado: number;
+  aviso: string;
+}
+
+export interface RespuestaLugares {
+  locales: Lugar[];
+  externos: Lugar[];
+  aviso?: string;
+}

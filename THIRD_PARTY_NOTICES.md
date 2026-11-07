@@ -26,3 +26,13 @@ vienen dentro de los propios `.jar`).
 | Datos Abiertos de Cali (datos.cali.gov.co) | Intersecciones semaforizadas, accidentalidad | **Por verificar por conjunto de datos** | Citar la fuente. Revisar la licencia indicada en cada conjunto antes de publicar |
 
 La red de demostración `RedCali` es **ficticia** (inventada por el equipo) y no contiene datos de terceros.
+
+## Servicios externos que usa la aplicación en funcionamiento
+
+| Servicio | Para qué | Condiciones |
+|---|---|---|
+| Teselas de OpenStreetMap (`tile.openstreetmap.org`) | Mapa base que se ve debajo de las calles | [Política de uso de teselas](https://operations.osmfoundation.org/policies/tiles/): uso moderado, atribución, y que el navegador envíe de qué sitio viene la petición. Para mucho tráfico hay que usar otro proveedor (variable `VITE_TILES_URL`). |
+| Nominatim (`nominatim.openstreetmap.org`) | Buscar lugares por nombre | [Política de uso](https://operations.osmfoundation.org/policies/nominatim/): máximo una consulta por segundo, identificarse con un User-Agent, sin autocompletar. El servidor lo cumple (límite global, caché, solo al pulsar «Buscar»). |
+| API Overpass (`overpass-api.de`) | Descargar las calles de una zona | Uso compartido y moderado: no repetir la descarga sin necesidad. |
+
+Los datos de los tres son © colaboradores de OpenStreetMap, licencia ODbL.

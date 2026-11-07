@@ -3,10 +3,13 @@
 [![Verificación](https://github.com/jsaguadob/smarttraffic-cali/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaguadob/smarttraffic-cali/actions/workflows/ci.yml)
 ![Licencia MIT](https://img.shields.io/badge/licencia-MIT-green)
 
-Centro de control de movilidad urbana **de código abierto**, hecho en **Java**, sobre el **mapa real de Cali
-(OpenStreetMap)** y los **datos abiertos** de la ciudad. Proyecto académico de Estructuras de Datos.
+Sistema de **navegación y control de movilidad urbana de código abierto**, hecho en **Java**, sobre el **mapa real de Cali
+(OpenStreetMap)** y los **datos abiertos** de la ciudad: busca un lugar, calcula la ruta con el tráfico del momento, da las
+instrucciones giro a giro y permite a un operador manejar incidentes, emergencias y semáforos. Proyecto académico de Estructuras de Datos.
 
-![Consola del operador: un accidente grave en la Calle 13 y las rutas prioritarias de ambulancia y bomberos](docs/capturas/consola-accidente.png)
+| Cómo llegar | Centro de control |
+|---|---|
+| ![Ruta de A a B con alternativas, tiempos e instrucciones](docs/capturas/navegacion-ruta.png) | ![Un accidente grave y las rutas prioritarias de ambulancia y bomberos](docs/capturas/consola-accidente.png) |
 
 > **Qué es y qué no es.** No controla semáforos ni lee sensores reales de la ciudad (eso no es posible para un
 > proyecto académico). Los vehículos animados son una **estimación del flujo** que calcula un modelo sobre calles
@@ -15,6 +18,11 @@ Centro de control de movilidad urbana **de código abierto**, hecho en **Java**,
 
 ## Qué hace
 
+- **Navegación («Cómo llegar»)**: buscas origen y destino por nombre de calle o intersección (o un lugar de OpenStreetMap, o tu
+  ubicación), o los eliges en el mapa; el sistema calcula la ruta más rápida y alternativas con el tráfico actual, los semáforos
+  y las calles cerradas, con **instrucciones giro a giro**. «Iniciar navegación» guía un vehículo por la ruta y **la recalcula si
+  ocurre un accidente en el camino**.
+- **Mapa real**: teselas de OpenStreetMap debajo de las calles reales de Cali (descargadas por el propio servidor).
 - **Mapa interactivo**: calles con curvas y sentidos, vehículos en movimiento (autos, motos, buses), semáforos que cambian,
   congestión por colores, zoom y arrastre (también en el celular).
 - **Se puede tocar**: provocar un accidente con un clic sobre una calle, despachar ambulancia, bomberos o policía a una
@@ -46,6 +54,10 @@ demostración (ficticia). **El modo demostración nunca debe usarse en un servid
 
 ### El mapa real de Cali
 
+Lo más simple: entra como **administrador** y pulsa **«Usar el mapa real de Cali»** (centro de control, o *Editor de red*). El
+servidor descarga las calles de OpenStreetMap (≈ 2 km de lado alrededor del centro, o ≈ 4 km), las convierte en la red de
+calles y la guarda. Necesita internet en el servidor. También se puede hacer desde la terminal:
+
 ```bash
 ./importar-cali.sh                  # descarga las calles de OpenStreetMap (necesita internet)
 SMARTTRAFFIC_RED=backend/data/red-cali.json ./run.sh
@@ -57,7 +69,7 @@ Los accidentes (CSV o GeoJSON de [datos.cali.gov.co](https://datos.cali.gov.co))
 ## Pruebas
 
 ```bash
-./test.sh                           # 56 pruebas JUnit (estructuras, rutas, simulación, importador, API, seguridad)
+./test.sh                           # 82 pruebas JUnit (estructuras, rutas, simulación, importador, API, seguridad)
 cd frontend && npm ci && npm run build
 ```
 

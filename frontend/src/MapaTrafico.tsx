@@ -3,7 +3,7 @@ import type { MutableRefObject } from 'react';
 import type { Instantanea } from './tipos';
 import { CapaTeselas } from './teselas';
 import type { Origen } from './teselas';
-import { luzDeFase, nodoCercano, puntoEnVia, viaCercana } from './geometria';
+import { largoPolilinea, luzDeFase, nodoCercano, puntoEnPolilinea, puntoEnVia, viaCercana } from './geometria';
 import type { RedGeo } from './geometria';
 
 export interface CapasMapa {
@@ -14,6 +14,15 @@ export interface CapasMapa {
   semaforos: boolean;
   rutas: boolean;
   calor: boolean;
+}
+
+/** Ruta de navegación dibujada sobre el mapa. */
+export interface RutaMapa {
+  opciones: { pts: number[]; sel: boolean }[];
+  origen: { x: number; y: number } | null;
+  destino: { x: number; y: number } | null;
+  /** Vehículo guiado: avanza por la ruta según el tiempo simulado. */
+  guia: { pts: number[]; t0: number; duracion: number } | null;
 }
 
 export interface PuntoMapa {
@@ -51,6 +60,11 @@ export interface PropsMapa {
   cursor?: string;
   editor?: boolean;
   enfocar?: { x: number; y: number; k?: number; n: number } | null;
+  /** Ruta de navegación a dibujar. */
+  ruta?: RutaMapa | null;
+  /** Mientras es verdadero, cada clic solo llama a {@code onClickMapa} (para elegir un punto del mapa). */
+  modoElegir?: boolean;
+  onClickMapa?: (x: number, y: number) => void;
   onClickVia?: (viaId: string, pos: number) => void;
   onClickNodo?: (nodoId: string) => void;
   onClickVacio?: (x: number, y: number) => void;
@@ -278,6 +292,8 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     }
     if (ar.movido) return;
     const o = objetivoEn(p.x, p.y);
+    pr.onClickMapa?.(o.x, o.y);
+    if (pr.modoElegir) return;
     if (o.tipo === 'nodo') pr.onClickNodo?.(o.id);
     else if (o.tipo === 'via') pr.onClickVia?.(o.id, o.pos);
     else pr.onClickVacio?.(o.x, o.y);
@@ -403,6 +419,29 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     };
     resaltar(hover.current, '#1a73e8', 5);
     resaltar(pr.seleccion, '#1a73e8', 9);
+
+    // ruta de navegación: las alternativas en gris y la elegida en azul, con borde blanco
+    const rt = pr.ruta;
+    if (rt) {
+      const trazarRuta = (pts: number[]) => {
+        ctx.beginPath();
+        ctx.moveTo(pts[0], pts[1]);
+        for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+      };
+      for (const pasada of [false, true]) {
+        for (const o of rt.opciones) {
+          if (o.sel !== pasada || o.pts.length < 4) continue;
+          trazarRuta(o.pts);
+          ctx.lineWidth = Math.max(5.5, (o.sel ? 9 : 7) * px);
+          ctx.strokeStyle = '#ffffff';
+          ctx.stroke();
+          trazarRuta(o.pts);
+          ctx.lineWidth = Math.max(3.4, (o.sel ? 6 : 4.4) * px);
+          ctx.strokeStyle = o.sel ? '#1a73e8' : '#9aa0a6';
+          ctx.stroke();
+        }
+      }
+    }
 
     // rutas prioritarias de emergencias
     if (inst && capas.rutas) {
@@ -576,6 +615,55 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
         ctx.textBaseline = 'middle';
         ctx.fillText(String(i + 1), c.x, c.y + 0.4 * px);
       });
+    }
+
+    // origen, destino y vehículo guiado de la navegación
+    if (rt) {
+      const pin = (pt: { x: number; y: number }, letra: string, color: string) => {
+        const r = Math.max(10, 12.5 * px);
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.lineWidth = 2.4 * px;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 ${r * 1.15}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(letra, pt.x, pt.y + r * 0.06);
+      };
+      if (rt.origen) pin(rt.origen, 'A', '#1a73e8');
+      if (rt.destino) pin(rt.destino, 'B', '#d93025');
+      if (rt.guia && inst) {
+        const dtG = inst.corriendo ? Math.min(0.15, Math.max(0, (ahora - recibido) / 1000)) * inst.velocidad : 0;
+        const prog = Math.max(0, Math.min(1, (inst.t + dtG - rt.guia.t0) / rt.guia.duracion));
+        const q = puntoEnPolilinea(rt.guia.pts, prog * largoPolilinea(rt.guia.pts));
+        const r = Math.max(9, 11 * px);
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, r * 1.9, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(26,115,232,0.2)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a73e8';
+        ctx.fill();
+        ctx.lineWidth = 2.6 * px;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+        ctx.save();
+        ctx.translate(q.x, q.y);
+        ctx.rotate(q.ang);
+        ctx.beginPath();
+        ctx.moveTo(r * 0.62, 0);
+        ctx.lineTo(-r * 0.38, r * 0.5);
+        ctx.lineTo(-r * 0.38, -r * 0.5);
+        ctx.closePath();
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     // intersecciones marcadas para la onda verde

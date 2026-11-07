@@ -32,7 +32,7 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
 
   // ------------------------------------------------ operador
   await clic('Operador de movilidad · controla la simulación e incidentes', 'button') || await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Operador de movilidad')).click());
-  ok(await esperar(hayTexto('Estado de la red'), 15000), 'el operador entra al centro de control');
+  ok(await esperar(hayTexto('Cómo llegar'), 15000), 'el operador entra al centro de control (se abre en «Cómo llegar»)'); await clic('Resumen', 'button'); await esperar(hayTexto('Estado de la red'));
   ok(await esperar(async () => (await pixeles()) > 800, 8000), 'el mapa se dibuja (calles visibles en el lienzo)', 'píxeles ' + await pixeles()); await foto('2-consola-inicial');
   const red = (await api('GET', '/api/red')).cuerpo;
   ok(red.intersecciones.length === 18 && red.vias.length === 40, 'la red de demostración tiene 18 intersecciones y 40 tramos');

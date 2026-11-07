@@ -44,6 +44,7 @@ con las variables de abajo para un servidor real.
 | `SMARTTRAFFIC_JWT_SECRET` | Clave de las sesiones (mín. 32 caracteres). Sin ella se genera una al azar en cada arranque. |
 | `SMARTTRAFFIC_ADMIN_CORREO`, `SMARTTRAFFIC_ADMIN_CLAVE` | Primer administrador. Si no pones la clave se genera una y se imprime **una sola vez** en el registro. |
 | `SMARTTRAFFIC_CORS` | Pantallas autorizadas, separadas por coma. Admite `*` dentro de la dirección (p. ej. `https://*--sitio.netlify.app` para las ramas). Un `*` solo se ignora a propósito. |
+| `SMARTTRAFFIC_OVERPASS`, `SMARTTRAFFIC_NOMINATIM` | Opcionales: direcciones alternativas de los servicios de OpenStreetMap (calles y búsqueda de lugares), por si se usa un servidor propio. |
 | `SMARTTRAFFIC_RED` | Archivo JSON con el mapa real importado; se carga una vez, cuando la base está vacía. |
 | `SMARTTRAFFIC_DEMO=1` | Crea tres usuarios de prueba con contraseña conocida. **Nunca en un servidor público.** |
 
@@ -67,10 +68,22 @@ lo dan de forma automática.
 
 ### El mapa real de Cali
 
-En un computador con internet: `./importar-cali.sh` descarga las calles de OpenStreetMap y escribe
+**Desde la propia aplicación (lo más simple):** entra como administrador y pulsa **«Usar el mapa real de Cali»**. El servidor
+(que necesita internet) descarga y convierte las calles; tarda de unos segundos a un par de minutos. Elige primero la zona
+de ≈ 2 km: la de ≈ 4 km usa bastante más memoria y en un plan gratuito pequeño puede quedarse corta.
+
+**Desde un computador con internet:** `./importar-cali.sh` descarga las calles de OpenStreetMap y escribe
 `backend/data/red-cali.json`. Luego arranca el servidor con `SMARTTRAFFIC_RED=backend/data/red-cali.json` o, ya con
 el servidor en marcha, entra como administrador a **Editor de red → Importar red** y sube ese archivo.
 Los accidentes (datos abiertos de la Alcaldía, CSV o GeoJSON con latitud y longitud) se suben en el mismo lugar.
+
+### Mapa base y búsqueda de lugares
+
+El mapa base real son **teselas de OpenStreetMap**, que descarga el navegador de cada persona. Es un servicio gratuito de uso
+moderado ([política](https://operations.osmfoundation.org/policies/tiles/)); si la aplicación se usara con mucha gente habría que
+cambiar de proveedor con la variable de compilación `VITE_TILES_URL` (por ejemplo `https://miservidor/{z}/{x}/{y}.png`) y permitir
+ese sitio en la política de seguridad de `netlify.toml` (`img-src`). La búsqueda de lugares usa Nominatim con las reglas de su
+política (una consulta por segundo, caché, solo al pulsar «Buscar en OpenStreetMap»).
 
 ## 2. La pantalla en Netlify
 
