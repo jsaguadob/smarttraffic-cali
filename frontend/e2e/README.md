@@ -32,3 +32,14 @@ python3 frontend/e2e/servidor_teselas.py 9099 261 211 &
 cd frontend && VITE_TILES_URL='http://localhost:9099/{z}/{x}/{y}.png' npx vite build --outDir /tmp/dist-tiles
 # ... arrancar el servidor Java con SMARTTRAFFIC_STATIC=/tmp/dist-tiles SMARTTRAFFIC_PORT=8097 y correr recorrido-teselas.cjs
 ```
+
+## Todos los recorridos
+
+| Archivo | Qué comprueba | Comprobaciones |
+|---|---|---|
+| `recorrido-1.cjs` | ingreso por rol, simulación, accidente por clic, emergencias, analista solo lectura | 27 |
+| `recorrido-2.cjs` | editor de red, comparación de escenarios, usuarios, celular | 29 |
+| `recorrido-navegacion.cjs` | buscar lugares, calcular rutas y alternativas, elegir en el mapa, navegación guiada y recálculo ante un accidente | 21 |
+| `recorrido-importar.cjs` | descarga del mapa que falla sin internet (con la causa explicada), prueba de conexión y subida del archivo (`overpass-ejemplo.json`) | 13 |
+| `recorrido-teselas.cjs` | alineación del mapa base real (ver arriba) | 12 |
+| `rendimiento-mapa.cjs` | cuadros por segundo con una red grande (`red-grande.cjs` la genera) | — |

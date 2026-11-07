@@ -196,7 +196,14 @@ function CampoLugar({ letra, etiqueta, valor, esReal, alElegir, alMapa, extra }:
   const [buscando, setBuscando] = useState(false);
   const temporizador = useRef<number | undefined>(undefined);
 
-  useEffect(() => { setTexto(valor?.nombre ?? ''); }, [valor]);
+  // Mantiene el texto al día con el lugar elegido (por ejemplo al elegirlo en el mapa o al intercambiar origen y destino).
+  // Si es la propia persona quien está editando un lugar ya elegido, no se le borra lo que escribe.
+  const editando = useRef(false);
+  useEffect(() => {
+    if (valor) { setTexto(valor.nombre); editando.current = false; }
+    else if (editando.current) editando.current = false;
+    else setTexto('');
+  }, [valor]);
 
   const buscar = (q: string, externo: boolean) => {
     window.clearTimeout(temporizador.current);
@@ -220,7 +227,7 @@ function CampoLugar({ letra, etiqueta, valor, esReal, alElegir, alMapa, extra }:
       <span className={'punto ' + (letra === 'A' ? 'a' : 'b')} aria-hidden="true">{letra}</span>
       <input
         id={id} aria-label={etiqueta} placeholder={etiqueta} value={texto} autoComplete="off" role="combobox" aria-expanded={abierto && todas.length > 0} aria-controls={id + '-lista'}
-        onChange={(e) => { setTexto(e.target.value); if (valor) alElegir(null); setAbierto(true); buscar(e.target.value, false); }}
+        onChange={(e) => { setTexto(e.target.value); if (valor) { editando.current = true; alElegir(null); } setAbierto(true); buscar(e.target.value, false); }}
         onFocus={() => setAbierto(true)}
         onBlur={() => window.setTimeout(() => setAbierto(false), 160)}
         onKeyDown={(e) => {

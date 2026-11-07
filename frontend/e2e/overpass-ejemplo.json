@@ -1,0 +1,6 @@
+{"elements":[
+  {"type":"node","id":1,"lat":3.4500,"lon":-76.5350},{"type":"node","id":2,"lat":3.4500,"lon":-76.5338,"tags":{"highway":"traffic_signals"}},
+  {"type":"node","id":3,"lat":3.4500,"lon":-76.5326},{"type":"node","id":4,"lat":3.4512,"lon":-76.5338},
+  {"type":"way","id":10,"nodes":[1,2,3],"tags":{"highway":"secondary","name":"Calle Uno"}},
+  {"type":"way","id":11,"nodes":[2,4],"tags":{"highway":"residential","name":"Carrera Dos"}}
+]}

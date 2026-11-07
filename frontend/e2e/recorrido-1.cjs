@@ -25,8 +25,8 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
 
   // ------------------------------------------------ ingreso
   await p.goto(URL, { waitUntil: 'domcontentloaded' });
-  ok(await esperar(hayTexto('Ingresa con tu cuenta')), 'abre la pantalla de ingreso'); await foto('1-ingreso');
-  ok((await texto()).includes('Modo demostración') && (await texto()).includes('Analista'), 'en modo demostración ofrece entrar con un clic como cada rol');
+  ok(await esperar(hayTexto('Iniciar sesión')), 'abre la pantalla de ingreso'); await foto('1-ingreso');
+  await p.evaluate(() => document.querySelector('details.demo-roles').setAttribute('open', '')); ok((await texto()).includes('Modo demostración') && (await texto()).includes('Analista'), 'en modo demostración ofrece (en un desplegable) entrar con un clic como cada rol');
   await p.type('input[type=email]', 'operador@smarttraffic.test'); await p.type('input[type=password]', 'incorrecta123'); await p.keyboard.press('Enter');
   ok(await esperar(hayTexto('Correo o contraseña incorrectos')), 'una contraseña mala muestra un mensaje claro y no revela nada más');
 

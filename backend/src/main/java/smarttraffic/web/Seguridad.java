@@ -24,9 +24,12 @@ public final class Seguridad {
 
     // ------------------------------------------------------------ contraseñas
 
-    /** Iteraciones de PBKDF2 (OWASP recomienda 600.000 para HMAC-SHA256). Las pruebas la bajan con -Dsmarttraffic.pbkdf2. */
+    /**
+     * Iteraciones de PBKDF2-HMAC-SHA512. OWASP recomienda 210.000 con SHA-512 (equivale a 600.000 con SHA-256) y calcula
+     * unas 2,5 veces más rápido en el servidor. Las pruebas la bajan con -Dsmarttraffic.pbkdf2.
+     */
     static int iteraciones() {
-        return Integer.getInteger("smarttraffic.pbkdf2", 600_000);
+        return Integer.getInteger("smarttraffic.pbkdf2", 210_000);
     }
 
     public static void validarClave(String clave) {
@@ -39,23 +42,34 @@ public final class Seguridad {
         byte[] sal = new byte[16];
         ALEATORIO.nextBytes(sal);
         int it = iteraciones();
-        return "pbkdf2$" + it + "$" + B64.encodeToString(sal) + "$" + B64.encodeToString(pbkdf2(clave, sal, it));
+        return "pbkdf2s512$" + it + "$" + B64.encodeToString(sal) + "$" + B64.encodeToString(pbkdf2(clave, sal, it, "PBKDF2WithHmacSHA512"));
+    }
+
+    /** ¿Está guardada con el formato antiguo (SHA-256) o con menos iteraciones que las actuales? Si sí, se vuelve a guardar al ingresar. */
+    public static boolean necesitaActualizar(String guardado) {
+        try {
+            String[] p = guardado.split("\\$");
+            return !p[0].equals("pbkdf2s512") || Integer.parseInt(p[1]) < iteraciones();
+        } catch (RuntimeException e) {
+            return true;
+        }
     }
 
     public static boolean verificarClave(String clave, String guardado) {
         try {
             String[] p = guardado.split("\\$");
-            if (p.length != 4 || !p[0].equals("pbkdf2")) return false;
+            if (p.length != 4 || !(p[0].equals("pbkdf2") || p[0].equals("pbkdf2s512"))) return false;
             byte[] esperado = D64.decode(p[3]);
-            return MessageDigest.isEqual(esperado, pbkdf2(clave, D64.decode(p[2]), Integer.parseInt(p[1])));
+            String alg = p[0].equals("pbkdf2s512") ? "PBKDF2WithHmacSHA512" : "PBKDF2WithHmacSHA256"; // las contraseñas guardadas antes siguen valiendo
+            return MessageDigest.isEqual(esperado, pbkdf2(clave, D64.decode(p[2]), Integer.parseInt(p[1]), alg));
         } catch (RuntimeException e) {
             return false;
         }
     }
 
-    private static byte[] pbkdf2(String clave, byte[] sal, int iteraciones) {
+    private static byte[] pbkdf2(String clave, byte[] sal, int iteraciones, String algoritmo) {
         try {
-            return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(new PBEKeySpec(clave.toCharArray(), sal, iteraciones, 256)).getEncoded();
+            return SecretKeyFactory.getInstance(algoritmo).generateSecret(new PBEKeySpec(clave.toCharArray(), sal, iteraciones, 256)).getEncoded();
         } catch (java.security.GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }

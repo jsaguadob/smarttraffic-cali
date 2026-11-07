@@ -69,7 +69,7 @@ Los accidentes (CSV o GeoJSON de [datos.cali.gov.co](https://datos.cali.gov.co))
 ## Pruebas
 
 ```bash
-./test.sh                           # 82 pruebas JUnit (estructuras, rutas, simulación, importador, API, seguridad)
+./test.sh                           # 92 pruebas JUnit (estructuras, rutas, simulación, importador, API, seguridad)
 cd frontend && npm ci && npm run build
 ```
 
@@ -112,6 +112,21 @@ servicio de contenedores o en un servidor propio: ver [`docs/despliegue.md`](doc
 ## Autores
 
 Juan Sebastián Aguado, Valentina Sánchez y Angie Paulette Murillo.
+
+## Rendimiento
+
+Qué se hizo para que responda rápido, y qué se midió (en un computador de desarrollo; los números en un servidor gratuito serán distintos):
+
+| Cambio | Medición |
+|---|---|
+| Reserva de conexiones a la base de datos (antes se abría una por petición) | una consulta a PostgreSQL pasó de 9,84 ms a 0,18 ms (local, sin cifrado; contra una base remota el ahorro es mayor) |
+| Contraseñas con PBKDF2-SHA512 de 210.000 iteraciones (misma fuerza según OWASP que SHA-256 con 600.000) | de 597 ms a 237 ms por inicio de sesión; las contraseñas antiguas siguen valiendo y se actualizan al ingresar |
+| Respuestas comprimidas (gzip) y archivos de la pantalla comprimidos una sola vez | una prueba exige que lo comprimido pese menos de la tercera parte |
+| Los usuarios se recuerdan 30 s, y cualquier cambio de usuarios vacía la memoria (desactivar a alguien sigue siendo inmediato) | evita una consulta por petición |
+| No se arma la instantánea en vivo si nadie la está mirando; 5 por segundo en lugar de 10 | — |
+| El mapa pinta la red una sola vez en una imagen y la reutiliza; 30 cuadros por segundo con movimiento y 10 si todo está quieto | con 3.024 calles y ≈ 490 vehículos, en un navegador sin tarjeta gráfica: antes se atascaba a los ~3 s; ahora sostiene 30 cuadros por segundo (`frontend/e2e/rendimiento-mapa.cjs`) |
+
+Lo que no se puede arreglar desde el código: en el plan gratuito de Render el servidor se duerme tras un rato sin uso y la primera carga tarda cerca de un minuto.
 
 ## Licencia y datos
 

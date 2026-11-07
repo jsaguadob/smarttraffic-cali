@@ -286,7 +286,7 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
           <div className="banner-mapa" role="region" aria-label="Mapa de demostración">
             <b>Estás viendo una red de demostración (ficticia)</b>
             <p>Para ver las calles reales de Cali, el servidor puede descargar el mapa de OpenStreetMap.</p>
-            {verImportar ? <ImportarMapa alTerminar={alRedImportada} /> : <button className="boton primario" onClick={() => setVerImportar(true)}>Usar el mapa real de Cali</button>}
+            {verImportar ? <ImportarMapa alTerminar={() => { alRedImportada(); avisar('Mapa cargado: ahora ves la red de calles importada.'); }} /> : <button className="boton primario" onClick={() => setVerImportar(true)}>Usar el mapa real de Cali</button>}
           </div>
         )}
         <div className="leyenda-mapa" aria-label="Capas del mapa">

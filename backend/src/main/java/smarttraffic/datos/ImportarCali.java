@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import smarttraffic.red.Interseccion;
 
@@ -106,23 +107,83 @@ public final class ImportarCali {
         return b;
     }
 
-    /** Consulta la API Overpass (POST). Reintenta {@code intentos} veces esperando {@code esperaBaseMs} × número de intento. */
+    /** Consulta la API Overpass (POST) en un solo servidor. */
     public static String descargar(String url, String consulta, int intentos, long esperaBaseMs) throws IOException, InterruptedException {
+        return descargar(List.of(url), consulta, intentos, esperaBaseMs);
+    }
+
+    /**
+     * Consulta la API Overpass probando cada servidor de la lista, en orden, hasta que uno responda.
+     * En cada servidor reintenta {@code intentos} veces esperando {@code esperaBaseMs} × número de intento.
+     * Si todos fallan, el error dice qué pasó en cada uno.
+     */
+    public static String descargar(List<String> urls, String consulta, int intentos, long esperaBaseMs) throws IOException, InterruptedException {
         HttpClient cliente = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(240))
-                .header("Content-Type", "application/x-www-form-urlencoded").header("User-Agent", "SmartTraffic/1.0 (proyecto academico de estructuras de datos)")
-                .POST(HttpRequest.BodyPublishers.ofString("data=" + URLEncoder.encode(consulta, StandardCharsets.UTF_8))).build();
-        IOException ultimo = null;
-        for (int intento = 1; intento <= intentos; intento++) {
-            try {
-                HttpResponse<String> r = cliente.send(req, HttpResponse.BodyHandlers.ofString());
-                if (r.statusCode() == 200) return r.body();
-                ultimo = new IOException("El servicio de mapas respondió " + r.statusCode() + (r.statusCode() == 429 || r.statusCode() == 504 ? " (está ocupado; espera unos minutos)" : ""));
-            } catch (IOException e) {
-                ultimo = new IOException("No se pudo conectar con el servicio de mapas (" + e.getMessage() + "). Revisa tu conexión a internet.");
+        List<String> fallos = new ArrayList<>();
+        for (String url : urls) {
+            HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(240))
+                    .header("Content-Type", "application/x-www-form-urlencoded").header("User-Agent", "SmartTraffic/1.0 (proyecto academico de estructuras de datos)")
+                    .POST(HttpRequest.BodyPublishers.ofString("data=" + URLEncoder.encode(consulta, StandardCharsets.UTF_8))).build();
+            String ultimo = "sin respuesta";
+            for (int intento = 1; intento <= intentos; intento++) {
+                try {
+                    HttpResponse<String> r = cliente.send(req, HttpResponse.BodyHandlers.ofString());
+                    if (r.statusCode() == 200) return r.body();
+                    ultimo = "respondió " + r.statusCode() + (r.statusCode() == 429 || r.statusCode() == 504 ? " (está ocupado)" : "");
+                } catch (IOException e) {
+                    ultimo = refinar(e, url);
+                    System.err.println("Descarga del mapa fallida en " + servidor(url) + ": " + e);
+                }
+                if (intento < intentos) Thread.sleep(esperaBaseMs * intento);
             }
-            if (intento < intentos) Thread.sleep(esperaBaseMs * intento);
+            fallos.add(servidor(url) + " → " + ultimo);
         }
-        throw ultimo;
+        throw new IOException("No se pudo descargar el mapa. " + String.join(" · ", fallos));
+    }
+
+    /**
+     * Java suele informar «conexión fallida» sin decir por qué. Si no hay una causa clara, se comprueba directamente si el
+     * nombre del servidor se puede resolver: es la causa más frecuente en un servidor sin salida a internet.
+     */
+    static String refinar(IOException e, String url) {
+        String d = describir(e);
+        if (e instanceof java.net.ConnectException) {
+            try {
+                java.net.InetAddress.getAllByName(servidor(url));
+            } catch (java.net.UnknownHostException u) {
+                return describir(u);
+            }
+        }
+        return d;
+    }
+
+    static String servidor(String url) {
+        try {
+            String h = URI.create(url).getHost();
+            return h == null ? url : h;
+        } catch (IllegalArgumentException e) {
+            return url;
+        }
+    }
+
+    /** Explica en español un error de conexión (los de Java muchas veces no traen texto). */
+    public static String describir(IOException e) {
+        if (e instanceof java.net.http.HttpConnectTimeoutException) return "no respondió a tiempo al conectar";
+        if (e instanceof java.net.http.HttpTimeoutException) return "tardó demasiado en responder";
+        // Java suele esconder la causa verdadera dentro del error: se revisa toda la cadena de causas
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.net.UnknownHostException) return "no se encontró la dirección en el DNS (el servidor no logra resolver nombres de internet)";
+            if (t instanceof java.net.NoRouteToHostException) return "no hay ruta de red hasta el servidor (¿el servidor tiene salida a internet?)";
+            if (t instanceof java.net.SocketTimeoutException) return "tardó demasiado en responder";
+        }
+        if (e instanceof java.net.ConnectException) return "la conexión fue rechazada o bloqueada (¿el servidor tiene salida a internet?)";
+        if (e instanceof javax.net.ssl.SSLException) return "falló la conexión segura (" + (e.getMessage() == null ? "certificado" : e.getMessage()) + ")";
+        String m = e.getMessage();
+        return e.getClass().getSimpleName() + (m == null ? "" : ": " + m);
+    }
+
+    /** Dirección que, abierta en el navegador, descarga el mismo archivo que baja el servidor. */
+    public static String enlaceDescarga(String overpass, double[] z) {
+        return overpass + "?data=" + URLEncoder.encode(ImportadorOsm.consultaCalles(z[0], z[1], z[2], z[3]), StandardCharsets.UTF_8);
     }
 }

@@ -15,7 +15,7 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Administrador')).click());
   ok(await esperar(async () => (await texto()).includes('Estás viendo una red de demostración')), 'el administrador ve el aviso de que la red es de demostración y el botón para usar el mapa real');
   ok((await texto()).includes('Usar el mapa real de Cali'), 'con el botón «Usar el mapa real de Cali»');
-  await p.screenshot({ path: '' + (process.env.CAPTURAS || './capturas') + '/st-13-aviso-demo.png' });
+  await p.screenshot({ path: (process.env.CAPTURAS || './capturas') + '/st-13-aviso-demo.png' });
   // se le da a la red una ubicación real (centro de Cali), como lo hace el importador de OpenStreetMap
   const red = (await api('GET', '/api/red')).cuerpo; red.origen = { lat: 3.4516, lon: -76.5320 };
   const r = await api('POST', '/api/red/importar', red); ok(r.estado === 200, 'la red queda con ubicación real', JSON.stringify(r));
@@ -43,7 +43,7 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   console.log('   marca roja de la tesela vista junto a N11:', JSON.stringify(medida));
   ok(medida.n > 40, 'la marca roja (completa, sin tapar) de la tesela aparece en la pantalla junto a la intersección N11', JSON.stringify(medida));
   ok(medida.n > 4 && Math.abs(medida.dx) < 1.5 && Math.abs(medida.dy) < 1.5, 'y cae exactamente debajo de ella (error menor que 1,5 píxeles ≈ 2 m): el mapa base y las calles están alineados', JSON.stringify(medida));
-  await p.screenshot({ path: '' + (process.env.CAPTURAS || './capturas') + '/st-14-teselas.png' });
+  await p.screenshot({ path: (process.env.CAPTURAS || './capturas') + '/st-14-teselas.png' });
   // capa del mapa base desactivable
   await p.evaluate(() => [...document.querySelectorAll('label')].find((l) => l.textContent.includes('Mapa base')).querySelector('input').click()); await dormir(500);
   ok(!(await p.$('.atribucion')), 'al apagar «Mapa base» desaparece la atribución');

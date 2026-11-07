@@ -46,11 +46,13 @@ public final class Servidor implements AutoCloseable {
         /** Modo de demostración: el ingreso ofrece entrar con un clic como cada rol (solo para presentaciones). */
         public boolean demo = false;
         /** Servicio de OpenStreetMap (API Overpass) del que el servidor descarga el mapa. */
-        public String overpassUrl = "https://overpass-api.de/api/interpreter";
+        public String overpassUrl = "https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter,https://overpass.private.coffee/api/interpreter";
+        /** Una tesela cualquiera, solo para comprobar que el servidor llega al servicio de mapas. */
+        public String teselaPrueba = "https://tile.openstreetmap.org/0/0/0.png";
         /** Buscador de lugares (Nominatim). */
         public String nominatimUrl = "https://nominatim.openstreetmap.org/search";
-        public int overpassIntentos = 3;
-        public long overpassEsperaMs = 5000;
+        public int overpassIntentos = 2;
+        public long overpassEsperaMs = 4000;
     }
 
     /** Respuesta con estado distinto de 200. */
@@ -101,6 +103,10 @@ public final class Servidor implements AutoCloseable {
     interface Manejador {
         Object manejar(Peticion p) throws Exception;
     }
+
+    private record Comprimido(long modificado, int original, byte[] bytes) {}
+
+    private final Map<Path, Comprimido> comprimidos = new java.util.concurrent.ConcurrentHashMap<>();
 
     private record Ruta(String metodo, Pattern patron, List<String> nombres, Set<Rol> roles, int maxCuerpo, Manejador manejador) {}
 
@@ -192,6 +198,18 @@ public final class Servidor implements AutoCloseable {
         if (!(o instanceof Number n) || !Double.isFinite(n.doubleValue())) throw new IllegalArgumentException("Falta el número «" + clave + "»");
         if (n.doubleValue() < min || n.doubleValue() > max) throw new IllegalArgumentException("«" + clave + "» debe estar entre " + min + " y " + max);
         return n.doubleValue();
+    }
+
+    private static Map<String, Object> mapaDe(Map<String, String> consulta) {
+        Map<String, Object> m = new HashMap<>();
+        for (var e : consulta.entrySet()) {
+            try {
+                m.put(e.getKey(), Double.valueOf(e.getValue()));
+            } catch (NumberFormatException ex) {
+                throw new IllegalArgumentException("«" + e.getKey() + "» debe ser un número.");
+            }
+        }
+        return m;
     }
 
     private static int entero(String valor, int defecto, int min, int max) {
@@ -289,6 +307,23 @@ public final class Servidor implements AutoCloseable {
             return new Respuesta(202, importacionOsm.estado());
         });
         ruta("GET", "/api/red/importar-osm", ADMIN, p -> importacionOsm.estado());
+        ruta("GET", "/api/red/importar-osm/enlace", ADMIN, p -> {
+            double[] zona = ImportacionOsm.validarZona(new double[] {numero(mapaDe(p.consulta), "sur", -90, 90, null), numero(mapaDe(p.consulta), "oeste", -180, 180, null), numero(mapaDe(p.consulta), "norte", -90, 90, null), numero(mapaDe(p.consulta), "este", -180, 180, null)});
+            return Json.obj("url", smarttraffic.datos.ImportarCali.enlaceDescarga(importacionOsm.servidorPrincipal(), zona));
+        });
+        ruta("POST", "/api/red/importar-overpass", ADMIN, CUERPO_GRANDE, p -> {
+            Map<String, Object> r = importacionOsm.importarTexto(p.cuerpoTexto);
+            auditar(p, "red_importar_archivo_osm", null);
+            return Json.obj("estado", "LISTO", "resultado", r);
+        });
+        ruta("GET", "/api/red/diagnostico", ADMIN, p -> {
+            List<DiagnosticoRed.Prueba> pruebas = new ArrayList<>();
+            for (String u : opc.overpassUrl.split(",")) if (!u.isBlank()) pruebas.add(new DiagnosticoRed.Prueba("Calles (Overpass) · " + java.net.URI.create(u.trim()).getHost(), u.trim().replace("/api/interpreter", "/api/status")));
+            pruebas.add(new DiagnosticoRed.Prueba("Búsqueda de lugares (Nominatim)", opc.nominatimUrl.replace("/search", "/status.php")));
+            pruebas.add(new DiagnosticoRed.Prueba("Teselas del mapa", opc.teselaPrueba));
+            var r = DiagnosticoRed.probar(pruebas);
+            return Json.obj("pruebas", r, "resumen", DiagnosticoRed.resumen(r));
+        });
         ruta("POST", "/api/accidentes", ADMIN, CUERPO_GRANDE, p -> {
             var lista = DatosAbiertos.aAccidentes(DatosAbiertos.leerPuntos(texto(p.cuerpo(), "contenido")));
             repo.reemplazarAccidentes(lista);
@@ -364,6 +399,7 @@ public final class Servidor implements AutoCloseable {
         }
         limitadorCorreo.exito(correo);
         Usuario usuario = u.get();
+        if (Seguridad.necesitaActualizar(usuario.claveHash())) repo.actualizarUsuario(usuario.id(), null, null, null, Seguridad.hashClave(clave)); // pasa al formato más rápido
         repo.auditar(usuario.id(), "login", null);
         return Json.obj("token", Seguridad.crearToken(opc.secretoJwt, usuario.id(), usuario.nombre(), rol(usuario.rol()), 8 * 3600), "usuario", usuarioJson(usuario));
     }
@@ -570,10 +606,31 @@ public final class Servidor implements AutoCloseable {
         if (resultado instanceof Respuesta r) { estado = r.estado(); cuerpo = r.cuerpo(); }
         byte[] datos = (cuerpo instanceof Crudo c ? c.json() : Json.escribir(cuerpo)).getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        if (datos.length > MIN_COMPRIMIR && aceptaGzip(ex)) {
+            datos = comprimir(datos);
+            ex.getResponseHeaders().set("Content-Encoding", "gzip");
+        }
+        ex.getResponseHeaders().add("Vary", "Accept-Encoding");
         ex.sendResponseHeaders(estado, datos.length);
         try (OutputStream o = ex.getResponseBody()) {
             o.write(datos);
         }
+    }
+
+    /** Por debajo de este tamaño comprimir no compensa. */
+    private static final int MIN_COMPRIMIR = 1024;
+
+    private static boolean aceptaGzip(HttpExchange ex) {
+        String a = ex.getRequestHeaders().getFirst("Accept-Encoding");
+        return a != null && a.toLowerCase().contains("gzip");
+    }
+
+    private static byte[] comprimir(byte[] datos) throws IOException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream(datos.length / 3 + 64);
+        try (java.util.zip.GZIPOutputStream z = new java.util.zip.GZIPOutputStream(b)) {
+            z.write(datos);
+        }
+        return b.toByteArray();
     }
 
     /** Transmisión en vivo: cada instantánea de la simulación llega como un evento SSE. */
@@ -633,6 +690,18 @@ public final class Servidor implements AutoCloseable {
             h.set("Cache-Control", camino.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache");
         }
         byte[] datos = Files.readAllBytes(archivo);
+        boolean texto = List.of("html", "js", "css", "json", "svg", "map", "txt").contains(ext);
+        if (texto && datos.length > MIN_COMPRIMIR && aceptaGzip(ex)) {
+            Comprimido c = comprimidos.get(archivo);
+            long modificado = Files.getLastModifiedTime(archivo).toMillis();
+            if (c == null || c.modificado() != modificado || c.original() != datos.length) { // los archivos de la pantalla casi nunca cambian: se comprimen una sola vez
+                c = new Comprimido(modificado, datos.length, comprimir(datos));
+                comprimidos.put(archivo, c);
+            }
+            datos = c.bytes();
+            h.set("Content-Encoding", "gzip");
+        }
+        if (texto) h.add("Vary", "Accept-Encoding");
         ex.sendResponseHeaders(200, datos.length);
         try (OutputStream o = ex.getResponseBody()) { o.write(datos); }
     }

@@ -14,7 +14,13 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   const clic = (t, sel = 'button') => p.evaluate((t, sel) => { const e = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim() === t || x.getAttribute('aria-label') === t); if (!e) return false; e.click(); return true; }, t, sel);
   const api = (m, r, cuerpo) => p.evaluate(async (m, r, cuerpo) => { const x = await fetch(r, { method: m, headers: { Authorization: 'Bearer ' + sessionStorage.getItem('smarttraffic_token'), 'Content-Type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }); return { estado: x.status, cuerpo: await x.json().catch(() => null) }; }, m, r, cuerpo);
   const azules = () => p.evaluate(() => { const c = document.querySelector('canvas[data-testid="mapa"]'), g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - 26) < 6 && Math.abs(d[i + 1] - 115) < 6 && Math.abs(d[i + 2] - 232) < 6) n++; return n; });
-  const escribir = async (rotulo, valor) => { const el = await p.$(`input[aria-label="${rotulo}"]`); await el.click({ clickCount: 3 }); await p.keyboard.press('Backspace'); await el.type(valor); };
+  const escribir = async (rotulo, valor) => { // selecciona todo con el teclado (más fiable que el triple clic) y comprueba que quedó exactamente lo escrito
+    const el = await p.$(`input[aria-label="${rotulo}"]`);
+    for (let i = 0; i < 3; i++) {
+      await el.focus(); await p.keyboard.down('Control'); await p.keyboard.press('KeyA'); await p.keyboard.up('Control'); await p.keyboard.press('Backspace'); await el.type(valor);
+      if ((await p.$eval(`input[aria-label="${rotulo}"]`, (e) => e.value)) === valor) return;
+    }
+  };
   const elegirSugerencia = async (inicio, tipo) => { const ok = await esperar(async () => p.evaluate((i, t) => [...document.querySelectorAll('[role=option]')].some((x) => x.textContent.startsWith(i) && x.textContent.includes(t)), inicio, tipo), 5000); if (!ok) return false; await p.evaluate((i, t) => [...document.querySelectorAll('[role=option]')].find((x) => x.textContent.startsWith(i) && x.textContent.includes(t)).dispatchEvent(new MouseEvent('mousedown', { bubbles: true })), inicio, tipo); return true; };
 
   await p.goto(URL); await p.waitForFunction(() => [...document.querySelectorAll('button')].some((x) => x.textContent.includes('Operador de movilidad')));
@@ -25,6 +31,10 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   ok(await elegirSugerencia('Calle 25 con Carrera 1', 'Intersección'), 'al escribir «CALLE 25 con carrera 1» ofrece esa intersección (sin importar mayúsculas)');
   await escribir('Destino', 'calle 5 con carrera 39');
   ok(await elegirSugerencia('Calle 5 con Carrera 39', 'Intersección'), 'y para el destino también');
+  // un lugar ya elegido se puede editar sin que se pierda lo que se escribe
+  await p.focus('input[aria-label="Origen"]'); await p.keyboard.press('End'); await p.keyboard.type('x');
+  ok((await p.$eval('input[aria-label="Origen"]', (e) => e.value)) === 'Calle 25 con Carrera 1x', 'al editar un lugar ya elegido, la letra escrita no se pierde ni se borra el campo', await p.$eval('input[aria-label="Origen"]', (e) => e.value));
+  await escribir('Origen', 'calle 25 con carrera 1'); await elegirSugerencia('Calle 25 con Carrera 1', 'Intersección');
   await clic('Cómo llegar', 'button.primario');
   ok(await esperar(async () => !!(await p.$('[data-testid=tiempo-ruta]')), 8000), 'el botón «Cómo llegar» calcula la ruta y muestra el tiempo');
   const tiempo = await p.$eval('[data-testid=tiempo-ruta]', (e) => e.textContent); console.log('   tiempo de la ruta más rápida:', tiempo, '|', (await p.$$eval('.opcion-ruta', (l) => l.map((e) => e.textContent.replace(/\s+/g, ' ').slice(0, 90)))).join(' || '));

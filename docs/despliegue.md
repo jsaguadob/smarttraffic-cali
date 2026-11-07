@@ -77,6 +77,18 @@ de ≈ 2 km: la de ≈ 4 km usa bastante más memoria y en un plan gratuito pequ
 el servidor en marcha, entra como administrador a **Editor de red → Importar red** y sube ese archivo.
 Los accidentes (datos abiertos de la Alcaldía, CSV o GeoJSON con latitud y longitud) se suben en el mismo lugar.
 
+### Si la descarga del mapa falla
+
+El mensaje dice qué pasó en cada servidor. Pulsa **«Probar la conexión del servidor»** para ver, desde el propio servidor, si
+llega a los servicios de OpenStreetMap (resolución de nombres, respuesta y tiempo). Si el servidor no tiene salida a internet, usa el
+**plan B**: «Descargar el mapa con mi navegador» abre el archivo en otra pestaña (puede tardar un minuto); guárdalo con Ctrl+S y
+súbelo con «Subir el archivo». En ese caso no vienen los hospitales ni las estaciones.
+
+### Si se siente lento
+
+La primera carga tras un rato sin uso tarda cerca de un minuto en el plan gratuito de Render (el servidor se duerme) y Neon también
+tarda un poco en despertar. Después, las respuestas deben ser rápidas. Dejar el servidor y la base en la misma región ayuda.
+
 ### Mapa base y búsqueda de lugares
 
 El mapa base real son **teselas de OpenStreetMap**, que descarga el navegador de cada persona. Es un servicio gratuito de uso

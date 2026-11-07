@@ -51,6 +51,7 @@ public final class GestorSimulacion implements AutoCloseable {
     private volatile double velocidad = 1;
     private double acumulado;
     private int ticksPausa;
+    private int ticksPublicar;
     private volatile String ultima = "{}";
 
     public GestorSimulacion(RedVial red) {
@@ -67,7 +68,7 @@ public final class GestorSimulacion implements AutoCloseable {
                 int pasos = (int) acumulado;
                 acumulado -= pasos;
                 for (int i = 0; i < pasos; i++) sim.paso();
-                publicar();
+                if (++ticksPublicar % 2 == 0) publicar(); // 5 veces por segundo: la pantalla ya interpola el movimiento entre una y otra
             } else if (++ticksPausa >= 10) { // en pausa se reenvía una vez por segundo para que las pantallas sigan sincronizadas
                 ticksPausa = 0;
                 publicar();
@@ -83,14 +84,16 @@ public final class GestorSimulacion implements AutoCloseable {
         return "{\"corriendo\":" + corriendo + ",\"velocidad\":" + velocidad + ",\"semilla\":" + cfg.semilla + "," + json.substring(1);
     }
 
+    /** Arma y reparte la instantánea solo si hay alguien mirando: sin navegadores conectados no se gasta nada. */
     private void publicar() {
+        if (suscriptores.isEmpty()) return;
         ultima = construir();
         for (Suscriptor s : suscriptores) s.entregar(ultima);
     }
 
     public Suscriptor suscribir() {
         Suscriptor s = new Suscriptor();
-        s.entregar(ultima);
+        s.entregar(ejecutar(this::construir));
         suscriptores.add(s);
         return s;
     }
@@ -99,8 +102,9 @@ public final class GestorSimulacion implements AutoCloseable {
         suscriptores.remove(s);
     }
 
+    /** Estado actual (se arma en el momento, porque sin suscriptores la instantánea guardada no se actualiza). */
     public String ultimaInstantanea() {
-        return ultima;
+        return ejecutar(this::construir);
     }
 
     /** Ejecuta una operación en el hilo de la simulación y devuelve su resultado (o lanza su error). Es la única forma de tocar la simulación. */

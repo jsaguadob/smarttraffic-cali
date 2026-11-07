@@ -100,6 +100,8 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
   const vista = useRef<Vista>({ k: 1, ox: 0, oy: 0 });
   const tamano = useRef({ w: 0, h: 0 });
   const rutas = useRef<Path2D[]>([]);
+  const todas = useRef<Path2D | null>(null);
+  const estatica = useRef<{ cv: HTMLCanvasElement | null; clave: string }>({ cv: null, clave: '' });
   const calorImg = useRef<{ lienzo: HTMLCanvasElement; x: number; y: number; k: number } | null>(null);
   const hover = useRef<{ tipo: 'via' | 'nodo'; id: string } | null>(null);
   const arrastre = useRef<{ modo: 'nada' | 'mapa' | 'nodo'; id?: string; x0: number; y0: number; ox0: number; oy0: number; movido: boolean } | null>(null);
@@ -108,6 +110,12 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
   const ajustado = useRef(false);
   const ultimoEnfoque = useRef(0);
   const teselas = useRef<CapaTeselas | null>(null);
+  const hayTeselasPendientes = () => (propsRef.current.capas.base && !!propsRef.current.origen);
+  const medida = useRef({ ms: 0, n: 0 });
+  /** Hasta cuándo (marca de tiempo) se dibuja a toda velocidad por haberse movido o tocado el mapa. */
+  const interaccion = useRef(0);
+  /** Trabajo que solo cambia cuando llega una instantánea nueva (no en cada cuadro): niveles por vía y un trazo por color. */
+  const cacheInst = useRef<{ inst: Instantanea | null; niveles: Map<number, number[]>; porNivel: Path2D[]; hayAnimacion: boolean; firma: string }>({ inst: null, niveles: new Map(), porNivel: [], hayAnimacion: false, firma: '' });
   if (teselas.current === null) teselas.current = new CapaTeselas(props.urlTeselas ?? URL_TESELAS);
 
   // ------------------------------------------------------------ vista
@@ -138,6 +146,8 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     (window as unknown as { __mapa?: unknown }).__mapa = {
       aPantalla: (x: number, y: number) => ({ x: x * vista.current.k + vista.current.ox, y: y * vista.current.k + vista.current.oy }),
       escala: () => vista.current.k,
+      cuadroMs: () => medida.current.ms,
+      cuadros: () => medida.current.n,
     };
   }, []);
 
@@ -146,6 +156,9 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
   // ------------------------------------------------------------ preparación (cuando cambia la red)
 
   useEffect(() => {
+    todas.current = null;
+    estatica.current.clave = '';
+    cacheInst.current.porNivel = [];
     rutas.current = props.geo.vias.map((g) => {
       const p = new Path2D();
       p.moveTo(g.pts[0], g.pts[1]);
@@ -206,6 +219,7 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     ro.observe(cont);
     const rueda = (ev: WheelEvent) => {
       ev.preventDefault();
+      interaccion.current = performance.now() + 600;
       const r = cv.getBoundingClientRect();
       acercar(Math.pow(1.0015, -ev.deltaY), ev.clientX - r.left, ev.clientY - r.top);
     };
@@ -232,6 +246,7 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
   };
 
   const alBajar = (ev: React.PointerEvent<HTMLCanvasElement>) => {
+    interaccion.current = performance.now() + 600;
     lienzo.current?.setPointerCapture(ev.pointerId);
     const p = posicion(ev);
     punteros.current.set(ev.pointerId, p);
@@ -247,6 +262,7 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
   };
 
   const alMover = (ev: React.PointerEvent<HTMLCanvasElement>) => {
+    interaccion.current = performance.now() + 600;
     const p = posicion(ev);
     if (punteros.current.has(ev.pointerId)) punteros.current.set(ev.pointerId, p);
     if (punteros.current.size === 2 && pinza.current) {
@@ -307,13 +323,21 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
 
   useEffect(() => {
     let id = 0;
+    let ultimo = 0;
     const cuadro = (ahora: number) => {
       id = requestAnimationFrame(cuadro);
       const cv = lienzo.current;
       if (!cv || tamano.current.w < 10) return;
+      // 30 cuadros por segundo bastan para mover vehículos que se interpolan; con todo quieto, 10 (solo para responder al zoom y al arrastre)
+      const intervalo = interaccion.current > ahora || cacheInst.current.hayAnimacion || hayTeselasPendientes() ? 30 : 100;
+      if (ahora - ultimo < intervalo) return;
+      ultimo = ahora;
       const ctx = cv.getContext('2d');
       if (!ctx) return;
+      const t0 = performance.now();
       dibujar(ctx, cv, ahora);
+      medida.current.ms = medida.current.ms * 0.9 + (performance.now() - t0) * 0.1;
+      medida.current.n++;
     };
     id = requestAnimationFrame(cuadro);
     return () => cancelAnimationFrame(id);
@@ -338,8 +362,20 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
     if (conBase && pr.origen) teselas.current!.dibujar(ctx, pr.origen, { minX: -ox / k, minY: -oy / k, maxX: (w - ox) / k, maxY: (h - oy) / k }, k, dpr);
 
     const { inst, recibido } = pr.fuente.current;
-    const niveles = new Map<number, number[]>();
-    if (inst) for (const c of inst.c) niveles.set(c[0], c);
+    // los niveles de congestión cambian como máximo una vez por segundo: se reagrupan solo cuando cambian de verdad
+    const cc = cacheInst.current;
+    if (inst !== cc.inst || cc.porNivel.length === 0) { // también cuando cambió la red (el caché quedó vacío) aunque la instantánea siga siendo la misma
+      const firma = inst ? inst.c.map((c) => c[0] * 4 + c[1]).join(',') : '';
+      cc.inst = inst;
+      cc.hayAnimacion = !!inst && (inst.corriendo || inst.e.length > 0 || inst.i.length > 0);
+      if (firma !== cc.firma || cc.porNivel.length === 0) {
+        cc.firma = firma;
+        cc.niveles = new Map<number, number[]>();
+        if (inst) for (const c of inst.c) cc.niveles.set(c[0], c);
+        cc.porNivel = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+        for (let i = 0; i < geo.vias.length; i++) cc.porNivel[cc.niveles.get(i)?.[1] ?? 0].addPath(rutas.current[i]);
+      }
+    }
 
     // mapa de calor de accidentes
     if (capas.calor && calorImg.current) {
@@ -349,52 +385,69 @@ export const MapaTrafico = forwardRef<ManejadorMapa, PropsMapa>(function MapaTra
       ctx.globalAlpha = 1;
     }
 
-    // sin mapa base se dibujan las calles (con mapa base ya vienen en la imagen)
+    // La red (calles, tráfico y flechas de sentido) se pinta una sola vez en una imagen aparte que se reutiliza en cada cuadro.
+    // Solo se vuelve a pintar cuando cambia algo que la afecta: el tráfico (como mucho una vez por segundo) o la vista.
+    // Pintar miles de curvas 30 veces por segundo es lo que ahogaba a los computadores modestos.
     const ancho = Math.max(3.4, 5.2 * px);
-    if (!conBase) {
-      for (let i = 0; i < geo.vias.length; i++) {
-        ctx.lineWidth = ancho + Math.max(1.0, 1.6 * px);
-        ctx.strokeStyle = '#b6bfcb';
-        ctx.stroke(rutas.current[i]);
-      }
-      for (let i = 0; i < geo.vias.length; i++) {
-        ctx.lineWidth = ancho;
-        ctx.strokeStyle = '#ffffff';
-        ctx.stroke(rutas.current[i]);
-      }
-    }
-
-    // tráfico: una línea de color sobre cada calle
     const grosor = Math.max(2.2, (conBase ? 3.6 : 2.8) * px);
-    if (capas.congestion) {
-      ctx.globalAlpha = 0.92;
-      for (let i = 0; i < geo.vias.length; i++) {
-        const c = niveles.get(i);
-        ctx.lineWidth = grosor;
-        ctx.strokeStyle = COLOR_NIVEL[c ? c[1] : 0];
-        ctx.stroke(rutas.current[i]);
-      }
-      ctx.globalAlpha = 1;
+    const clave = `${cv.width}x${cv.height}|${k.toFixed(6)}|${ox.toFixed(2)}|${oy.toFixed(2)}|${conBase ? 1 : 0}|${capas.congestion ? 1 : 0}|${cc.firma}|${geo.vias.length}`;
+    const est = estatica.current;
+    if (!est.cv || est.cv.width !== cv.width || est.cv.height !== cv.height) {
+      est.cv = document.createElement('canvas');
+      est.cv.width = cv.width;
+      est.cv.height = cv.height;
+      est.clave = '';
     }
-
-    // sentido de las calles de un solo sentido
-    if (k > 0.45) {
-      ctx.fillStyle = 'rgba(32,33,36,0.55)';
-      for (const g of geo.vias) {
-        if (!g.unSentido || g.largo < 40) continue;
-        const p = puntoEnVia(g, g.via.longitud * 0.5), s = Math.max(2.4, 3.2 * px);
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.ang);
-        ctx.beginPath();
-        ctx.moveTo(s, 0);
-        ctx.lineTo(-s * 0.7, s * 0.8);
-        ctx.lineTo(-s * 0.7, -s * 0.8);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
+    if (est.clave !== clave) {
+      const sc = est.cv.getContext('2d')!;
+      sc.setTransform(1, 0, 0, 1, 0, 0);
+      sc.clearRect(0, 0, est.cv.width, est.cv.height);
+      sc.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
+      sc.lineCap = 'round';
+      sc.lineJoin = 'round';
+      // sin mapa base se dibujan las calles (con mapa base ya vienen en la imagen)
+      if (!conBase) {
+        if (!todas.current) { todas.current = new Path2D(); for (const p of rutas.current) todas.current.addPath(p); }
+        sc.lineWidth = ancho + Math.max(1.0, 1.6 * px);
+        sc.strokeStyle = '#b6bfcb';
+        sc.stroke(todas.current);
+        sc.lineWidth = ancho;
+        sc.strokeStyle = '#ffffff';
+        sc.stroke(todas.current);
       }
+      // tráfico: una línea de color sobre cada calle (un trazo por color)
+      if (capas.congestion) {
+        sc.globalAlpha = 0.92;
+        sc.lineWidth = grosor;
+        for (let n = 0; n < 4; n++) {
+          sc.strokeStyle = COLOR_NIVEL[n];
+          sc.stroke(cc.porNivel[n]);
+        }
+        sc.globalAlpha = 1;
+      }
+      // sentido de las calles de un solo sentido
+      if (k > 0.45) {
+        sc.fillStyle = 'rgba(32,33,36,0.55)';
+        for (const g of geo.vias) {
+          if (!g.unSentido || g.largo < 40) continue;
+          const p = puntoEnVia(g, g.via.longitud * 0.5), sz = Math.max(2.4, 3.2 * px);
+          sc.save();
+          sc.translate(p.x, p.y);
+          sc.rotate(p.ang);
+          sc.beginPath();
+          sc.moveTo(sz, 0);
+          sc.lineTo(-sz * 0.7, sz * 0.8);
+          sc.lineTo(-sz * 0.7, -sz * 0.8);
+          sc.closePath();
+          sc.fill();
+          sc.restore();
+        }
+      }
+      est.clave = clave;
     }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(est.cv, 0, 0);
+    ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
 
     // selección y hover
     const resaltar = (sel: { tipo: string; id: string } | null | undefined, color: string, extra: number) => {

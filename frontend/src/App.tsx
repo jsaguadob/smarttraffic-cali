@@ -69,7 +69,7 @@ export function App(): ReactElement {
       const d = JSON.parse(m.data as string) as Instantanea;
       const ahora = performance.now();
       fuente.current = { inst: d, recibido: ahora };
-      if (ahora - ultimo > 250) { ultimo = ahora; setInst(d); }
+      if (ahora - ultimo > 500) { ultimo = ahora; setInst(d); } // los paneles se refrescan 2 veces por segundo; el mapa lee cada mensaje al instante
     };
     return () => es.close();
   }, [usuario, cargarRed]);
