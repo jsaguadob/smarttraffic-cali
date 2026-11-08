@@ -13,7 +13,7 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   const api = (m, r, cuerpo) => p.evaluate(async (m, r, cuerpo) => { const x = await fetch(r, { method: m, headers: { Authorization: 'Bearer ' + sessionStorage.getItem('smarttraffic_token'), 'Content-Type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }); return { estado: x.status, cuerpo: await x.json().catch(() => null) }; }, m, r, cuerpo);
   await p.goto('http://localhost:8097'); await p.waitForFunction(() => [...document.querySelectorAll('button')].some((x) => x.textContent.includes('Administrador')));
   await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Administrador')).click());
-  ok(await esperar(async () => (await texto()).includes('Estás viendo una red de demostración')), 'el administrador ve el aviso de que la red es de demostración y el botón para usar el mapa real');
+  ok(await esperar(async () => (await texto()).includes('Red de demostración · usar el mapa real')), 'el administrador ve la pastilla que avisa que la red es de demostración'); await p.evaluate(() => document.querySelector('.chip-mapa').click()); ok(await esperar(async () => (await texto()).includes('Estás viendo una red de demostración')), 'al abrirla muestra el aviso completo');
   ok((await texto()).includes('Usar el mapa real de Cali'), 'con el botón «Usar el mapa real de Cali»');
   await p.screenshot({ path: (process.env.CAPTURAS || './capturas') + '/st-13-aviso-demo.png' });
   // se le da a la red una ubicación real (centro de Cali), como lo hace el importador de OpenStreetMap
@@ -21,7 +21,7 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   const r = await api('POST', '/api/red/importar', red); ok(r.estado === 200, 'la red queda con ubicación real', JSON.stringify(r));
   await p.reload(); await p.waitForSelector('canvas[data-testid="mapa"]');
   ok(await esperar(async () => !!(await p.$('.atribucion')), 8000), 'con ubicación real aparece sobre el mapa la atribución «© colaboradores de OpenStreetMap»');
-  ok(!(await texto()).includes('Estás viendo una red de demostración'), 'y desaparece el aviso de red de demostración');
+  ok(!(await texto()).includes('Estás viendo una red de demostración') && !(await p.$('.chip-mapa')), 'y desaparecen el aviso y la pastilla de red de demostración');
   const pedidas = async () => (await (await fetch('http://localhost:9099/pedidas')).json());
   ok(await esperar(async () => (await pedidas()).length > 3, 8000), 'el navegador pide teselas del mapa base');
   const t = (await pedidas()).filter((x) => x[3] !== ''); const z = t[0][0]; // se ignora la prueba manual de curl (sin Referer)

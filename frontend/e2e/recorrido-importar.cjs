@@ -12,7 +12,8 @@ const ok = (c, m, extra) => { console.log((c ? 'PASS' : 'FAIL') + ' · ' + m + (
   const clic = (t) => p.evaluate((t) => { const e = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === t || x.textContent.trim().startsWith(t)); if (!e) return false; e.click(); return true; }, t);
   await p.goto((process.env.ST_URL || '' + (process.env.ST_URL || 'http://localhost:8095') + '')); await p.waitForFunction(() => [...document.querySelectorAll('button')].some((x) => x.textContent.includes('Administrador')));
   await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Administrador')).click());
-  ok(await esperar(hayTexto('Usar el mapa real de Cali'), 15000), 'el administrador ve el botón para usar el mapa real');
+  ok(await esperar(hayTexto('Red de demostración · usar el mapa real'), 15000), 'el aviso arranca minimizado, como una pastilla pequeña');
+  await clic('ⓘ Red de demostración · usar el mapa real'); ok(await esperar(hayTexto('Usar el mapa real de Cali'), 5000), 'al abrirlo ofrece el botón para usar el mapa real');
   await clic('Usar el mapa real de Cali'); await clic('Descargar el mapa real');
   ok(await esperar(hayTexto('Descargando'), 5000), 'al pulsar «Descargar el mapa real» muestra el progreso');
   ok(await esperar(hayTexto('No se pudo descargar el mapa'), 70000), 'como aquí no hay internet, la descarga falla y lo explica');

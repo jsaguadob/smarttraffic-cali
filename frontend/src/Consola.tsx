@@ -57,6 +57,7 @@ interface Props {
 export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReales, alRedImportada }: Props): ReactElement {
   const esAdmin = usuario.rol === 'ADMINISTRADOR';
   const [verImportar, setVerImportar] = useState(false);
+  const [bannerMin, setBannerMin] = useState(true); // el aviso del mapa de demostración arranca minimizado para no tapar el mapa
   const puedeOperar = usuario.rol !== 'ANALISTA';
   const mapa = useRef<ManejadorMapa>(null);
   const [herramienta, setHerramienta] = useState<Herramienta>('ver');
@@ -282,9 +283,17 @@ export function Consola({ geo, fuente, inst, usuario, conectado, coordenadasReal
           <button aria-label="Ajustar a la pantalla" onClick={() => mapa.current?.ajustar()}>⤢</button>
         </div>
         {capas.base && geo.red.origen && <div className="atribucion">© colaboradores de OpenStreetMap</div>}
-        {esAdmin && !coordenadasReales && (
+        {esAdmin && !coordenadasReales && bannerMin && (
+          <button className="chip-mapa" onClick={() => setBannerMin(false)} aria-label="Red de demostración: abrir opciones para usar el mapa real">
+            <span aria-hidden="true">ⓘ</span> Red de demostración · usar el mapa real
+          </button>
+        )}
+        {esAdmin && !coordenadasReales && !bannerMin && (
           <div className="banner-mapa" role="region" aria-label="Mapa de demostración">
-            <b>Estás viendo una red de demostración (ficticia)</b>
+            <div className="banner-cabeza">
+              <b>Estás viendo una red de demostración (ficticia)</b>
+              <button className="boton chico" onClick={() => setBannerMin(true)} aria-label="Minimizar el aviso">Minimizar ✕</button>
+            </div>
             <p>Para ver las calles reales de Cali, el servidor puede descargar el mapa de OpenStreetMap.</p>
             {verImportar ? <ImportarMapa alTerminar={() => { alRedImportada(); avisar('Mapa cargado: ahora ves la red de calles importada.'); }} /> : <button className="boton primario" onClick={() => setVerImportar(true)}>Usar el mapa real de Cali</button>}
           </div>

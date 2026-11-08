@@ -40,6 +40,6 @@ cd frontend && VITE_TILES_URL='http://localhost:9099/{z}/{x}/{y}.png' npx vite b
 | `recorrido-1.cjs` | ingreso por rol, simulación, accidente por clic, emergencias, analista solo lectura | 27 |
 | `recorrido-2.cjs` | editor de red, comparación de escenarios, usuarios, celular | 29 |
 | `recorrido-navegacion.cjs` | buscar lugares, calcular rutas y alternativas, elegir en el mapa, navegación guiada y recálculo ante un accidente | 21 |
-| `recorrido-importar.cjs` | descarga del mapa que falla sin internet (con la causa explicada), prueba de conexión y subida del archivo (`overpass-ejemplo.json`) | 13 |
-| `recorrido-teselas.cjs` | alineación del mapa base real (ver arriba) | 12 |
+| `recorrido-importar.cjs` | aviso minimizable de red de demostración, descarga del mapa que falla sin internet (con la causa explicada), prueba de conexión y subida del archivo (`overpass-ejemplo.json`) | 14 |
+| `recorrido-teselas.cjs` | alineación del mapa base real (ver arriba) | 13 |
 | `rendimiento-mapa.cjs` | cuadros por segundo con una red grande (`red-grande.cjs` la genera) | — |
